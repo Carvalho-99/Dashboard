@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Sugestões de Gestão{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-bold">
+      <i class="bi bi-magic text-warning me-2"></i>Sugestões de Gestão
+    </h4>
+    <small class="text-muted">Como pagar cada conta de forma mais inteligente — {{ month_name }} {{ year }}</small>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <select class="form-select form-select-sm w-auto" id="monthSel">
+      {% for mn, mname in months_list %}
+      <option value="{{ mn }}" {% if mn == month %}selected{% endif %}>{{ mname }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" class="form-control form-control-sm" id="yearSel" value="{{ year }}" style="width:80px">
+    <button class="btn btn-sm btn-outline-primary" id="applyDate">Ver</button>
+  </div>
+</div>
+
+{% if plan.warnings %}
+  {% for w in plan.warnings %}
+  <div class="alert alert-{{ w.level }} d-flex align-items-start gap-2 mb-2 py-2">
+    <i class="bi bi-exclamation-circle-fill mt-1 flex-shrink-0"></i>
+    <div class="small">{{ w.message }}</div>
+  </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Cards de resumo -->
+<div class="row g-3 mb-4">
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value text-success">R$ {{ "%.2f"|format(plan.total_income)|replace('.', ',') }}</div>
+      <div class="mini-stat-label">Renda total</div>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value text-danger">R$ {{ "%.2f"|format(plan.total_bills)|replace('.', ',') }}</div>
+      <div class="mini-stat-label">Total de contas</div>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value {% if plan.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
+        R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
+      </div>
+      <div class="mini-stat-label">{% if plan.savings >= 0 %}Sobra{% else %}Déficit{% endif %}</div>
+    </div>
+  </div>
+</div>
+
+{% if not plan.steps %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-lightbulb fs-1 d-block mb-3 opacity-25"></i>
+  <p>Cadastre suas rendas para ver as sugestões de pagamento.</p>
+  <a href="/incomes" class="btn btn-success"><i class="bi bi-plus-lg"></i> Adicionar renda</a>
+</div>
+
+{% else %}
+
+{% if plan.early_bills %}
+<div class="card mb-3 border-warning border-opacity-50">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle text-warning"></i>
+    <div>
+      <div class="fw-semibold text-warning">Contas antecipadas</div>
+      <small class="text-muted">Vencem antes do primeiro recebimento — reserve do mês anterior</small>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    {% for bill in plan.early_bills %}
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom border-secondary border-opacity-25">
+      <div class="priority-bar priority-{{ bill.priority }}"></div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold small">{{ bill.name }}</div>
+        <small class="text-muted">Vence dia {{ bill.due_day }}</small>
+      </div>
+      <div class="fw-bold text-warning">R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% for step in plan.steps %}
+<div class="card mb-3">
+  <!-- Cabeçalho da renda -->
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <div class="income-icon {% if step.income.type == 'salary' %}income-salary{% elif step.income.type == 'vale' %}income-vale{% else %}income-other{% endif %}">
+        {% if step.income.type == 'salary' %}<i class="bi bi-briefcase-fill"></i>
+        {% elif step.income.type == 'vale' %}<i class="bi bi-credit-card-fill"></i>
+        {% else %}<i class="bi bi-cash-stack"></i>{% endif %}
+      </div>
+      <div>
+        <div class="fw-semibold">{{ step.income.name }}</div>
+        <small class="text-muted">Recebe no dia <strong>{{ step.income.day_of_month }}</strong></small>
+      </div>
+    </div>
+    <div class="text-end">
+      <div class="text-success fw-bold">+ R$ {{ "%.2f"|format(step.income.amount)|replace('.', ',') }}</div>
+      <small class="text-muted">
+        Contas: R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}
+        → Sobra:
+        <span class="fw-semibold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
+          R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
+        </span>
+      </small>
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+    {% if step.bills_to_pay %}
+    <div class="px-3 pt-2 pb-1">
+      <small class="text-muted fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em">
+        <i class="bi bi-check2-circle text-success me-1"></i>Pagar com esta renda
+      </small>
+    </div>
+    {% set ns = namespace(bal = step.balance_after + step.bills_total) %}
+    {% for bill in step.bills_to_pay %}
+    {% set ns.bal = ns.bal - bill.amount %}
+    {% set urgency = step.urgency.get(bill.id, 'normal') %}
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom border-secondary border-opacity-25">
+      <div class="priority-bar priority-{{ bill.priority }}"></div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold small">{{ bill.name }}</div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <small class="text-muted">Vence dia {{ bill.due_day }}</small>
+          {% if urgency == 'danger' %}
+          <small class="text-danger"><i class="bi bi-clock-fill me-1"></i>Urgente</small>
+          {% elif urgency == 'warning' %}
+          <small class="text-warning"><i class="bi bi-clock me-1"></i>Em breve</small>
+          {% endif %}
+        </div>
+      </div>
+      <div class="text-end">
+        <div class="fw-bold">- R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+        <div class="small {% if ns.bal >= 0 %}text-success{% else %}text-danger{% endif %}" style="font-size:.72rem">
+          → R$ {{ "%.2f"|format(ns.bal)|replace('.', ',') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if step.bills_deferred %}
+    <div class="px-3 pt-2 pb-1 mt-1">
+      <small class="text-warning fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em">
+        <i class="bi bi-exclamation-triangle me-1"></i>Adiadas — saldo insuficiente
+      </small>
+    </div>
+    {% for bill in step.bills_deferred %}
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom border-secondary border-opacity-25 opacity-50">
+      <div class="priority-bar priority-{{ bill.priority }}"></div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold small text-warning">{{ bill.name }}</div>
+        <small class="text-muted">Vence dia {{ bill.due_day }}</small>
+      </div>
+      <div class="fw-bold text-warning">R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not step.bills_to_pay and not step.bills_deferred %}
+    <div class="px-3 py-3 text-muted small">
+      <i class="bi bi-check-circle text-success me-2"></i>Nenhuma conta nesta janela — valor fica disponível.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% if plan.tip %}
+<div class="alert alert-{{ plan.tip.color }} d-flex align-items-center gap-2 mt-2">
+  <i class="bi bi-{{ plan.tip.icon }} fs-5 flex-shrink-0"></i>
+  <div>{{ plan.tip.text }}</div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('applyDate').addEventListener('click', () => {
+  const m = document.getElementById('monthSel').value;
+  const y = document.getElementById('yearSel').value;
+  window.location.href = `/suggestions?month=${m}&year=${y}`;
+});
+</script>
+{% endblock %}

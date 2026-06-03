@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Contas{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-receipt text-primary me-2"></i>Contas</h4>
+    <small class="text-muted">{{ month_name }} {{ year }}</small>
+  </div>
+  <a href="/bills/add" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> Nova conta
+  </a>
+</div>
+
+<!-- Resumo rápido -->
+<div class="row g-2 mb-4">
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value text-danger">{{ bills|length }}</div>
+      <div class="mini-stat-label">Total contas</div>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value text-success">{{ paid_ids|length }}</div>
+      <div class="mini-stat-label">Pagas</div>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="mini-stat">
+      <div class="mini-stat-value text-warning">{{ bills|length - paid_ids|length }}</div>
+      <div class="mini-stat-label">Pendentes</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtro -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <button class="btn btn-sm btn-primary filter-btn active" data-filter="all">Todas</button>
+  <button class="btn btn-sm btn-outline-secondary filter-btn" data-filter="pending">Pendentes</button>
+  <button class="btn btn-sm btn-outline-secondary filter-btn" data-filter="paid">Pagas</button>
+  <button class="btn btn-sm btn-outline-secondary filter-btn" data-filter="overdue">Vencidas</button>
+</div>
+
+<!-- Lista de contas -->
+{% if bills %}
+  {% for b in bills %}
+  {% set is_paid = b['id'] in paid_ids %}
+  {% set payment = payment_map.get(b['id']) %}
+  {% set overdue = b['due_day'] < today and not is_paid %}
+  {% set near = today <= b['due_day'] <= today + 5 and not is_paid %}
+
+  <div class="bill-row {% if is_paid %}bill-paid{% elif overdue %}bill-overdue{% elif near %}bill-near{% endif %}"
+       data-status="{% if is_paid %}paid{% elif overdue %}overdue{% else %}pending{% endif %}">
+    <div class="d-flex align-items-center gap-3">
+      <!-- Prioridade -->
+      <div class="priority-bar priority-{{ b['priority'] }}"></div>
+
+      <!-- Check de pago -->
+      <div>
+        {% if is_paid %}
+        <form method="POST" action="/unpay" class="d-inline">
+          <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <button type="submit" class="check-btn check-paid" title="Clique para desmarcar">
+            <i class="bi bi-check-lg"></i>
+          </button>
+        </form>
+        {% else %}
+        <form method="POST" action="/pay/quick" class="d-inline">
+          <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <button type="submit" class="check-btn check-empty" title="Marcar como pago (1 clique)">
+            <i class="bi bi-circle"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+
+      <!-- Info -->
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="fw-semibold {% if is_paid %}text-muted text-decoration-line-through{% endif %}">
+            {{ b['name'] }}
+          </span>
+          <span class="badge badge-priority-{{ b['priority'] }} small">{{ priorities[b['priority']][0] }}</span>
+          {% if overdue %}<span class="badge bg-danger small">Vencida</span>{% endif %}
+          {% if near %}<span class="badge bg-warning text-dark small">Vence em breve</span>{% endif %}
+          {% if is_paid and payment %}<span class="badge bg-success small">Pago em {{ payment['paid_date'] }}</span>{% endif %}
+          {% if b['total_installments'] %}
+            {% set pc = bill_pay_counts.get(b['id'], 0) %}
+            {% if is_paid %}
+              <span class="badge bg-success small">Parcela {{ pc }}/{{ b['total_installments'] }}</span>
+            {% else %}
+              <span class="badge bg-primary small">Parcela {{ pc + 1 }}/{{ b['total_installments'] }}</span>
+            {% endif %}
+          {% elif b['end_month'] and b['end_year'] %}
+            {% set months_left = (b['end_year'] * 12 + b['end_month']) - (now.year * 12 + now.month) %}
+            <span class="badge bg-info text-dark small">
+              {% if months_left <= 0 %}Último mês{% elif months_left == 1 %}Encerra mês que vem{% else %}Encerra em {{ months_left }}m{% endif %}
+            </span>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-3 mt-1 flex-wrap">
+          <small class="text-muted">
+            <i class="bi bi-calendar3 me-1"></i>Vence dia <strong>{{ b['due_day'] }}</strong>
+          </small>
+          <small class="text-muted">
+            <i class="bi bi-tag me-1"></i>{{ categories[b['category']][0] if b['category'] in categories else b['category'] }}
+          </small>
+          {% if b['is_recurring'] %}
+          <small class="text-muted"><i class="bi bi-arrow-repeat me-1"></i>Mensal</small>
+          {% endif %}
+          {% if b['notes'] %}
+          <small class="text-muted"><i class="bi bi-chat-left-text me-1"></i>{{ b['notes'][:40] }}</small>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Valor + Ações -->
+      <div class="d-flex align-items-center gap-3">
+        <div class="text-end">
+          <div class="fw-bold {% if is_paid %}text-muted{% elif overdue %}text-danger{% else %}text-white{% endif %}">
+            R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
+          </div>
+          {% if is_paid and payment and payment['amount_paid'] != b['amount'] %}
+          <small class="text-muted">Pago: R$ {{ "%.2f"|format(payment['amount_paid']) }}</small>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-1">
+          {% if not is_paid %}
+          <button class="btn-icon" data-bs-toggle="modal" data-bs-target="#payModal{{ b['id'] }}" title="Registrar com detalhes">
+            <i class="bi bi-pencil-square text-muted"></i>
+          </button>
+          {% endif %}
+          <a href="/bills/edit/{{ b['id'] }}" class="btn-icon" title="Editar">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="POST" action="/bills/delete/{{ b['id'] }}" class="d-inline"
+                onsubmit="return confirm('Remover ' + {{ b['name']|tojson }} + '?')">
+            <button type="submit" class="btn-icon btn-icon-danger" title="Remover">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Pagar -->
+  {% if not is_paid %}
+  <div class="modal fade" id="payModal{{ b['id'] }}" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header border-secondary">
+          <h6 class="modal-title"><i class="bi bi-check2-circle text-success me-2"></i>Registrar pagamento</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="POST" action="/pay">
+          <div class="modal-body">
+            <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="year" value="{{ year }}">
+
+            <div class="mb-3">
+              <label class="form-label small text-muted">Valor pago (R$)</label>
+              <input type="number" name="amount_paid" class="form-control form-control-sm"
+                     value="{{ b['amount'] }}" step="0.01" min="0">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted">Data do pagamento</label>
+              <input type="date" name="paid_date" class="form-control form-control-sm"
+                     value="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted">Pago com</label>
+              <select name="income_source" class="form-select form-select-sm">
+                <option value="">— selecione —</option>
+                {% for i in incomes %}
+                <option value="{{ i['name'] }}">{{ i['name'] }}</option>
+                {% endfor %}
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <input type="text" name="notes" class="form-control form-control-sm" placeholder="Observação (opcional)">
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-sm btn-success">
+              <i class="bi bi-check-lg"></i> Confirmar pagamento
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endfor %}
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-receipt fs-1 d-block mb-3 opacity-25"></i>
+  <p>Nenhuma conta cadastrada ainda.</p>
+  <a href="/bills/add" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Adicionar primeira conta</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove('active', 'btn-primary');
+      b.classList.add('btn-outline-secondary');
+    });
+    btn.classList.add('active', 'btn-primary');
+    btn.classList.remove('btn-outline-secondary');
+
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.bill-row').forEach(row => {
+      if (filter === 'all') {
+        row.style.display = '';
+      } else {
+        row.style.display = row.dataset.status === filter ? '' : 'none';
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

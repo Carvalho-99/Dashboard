@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-bold">Dashboard</h4>
+    <small class="text-muted">{{ month_name }} {{ year }}</small>
+  </div>
+  <div class="d-flex gap-2">
+    {% if bills and bills|length > paid_count %}
+    <form method="POST" action="/pay/all" class="d-inline"
+          onsubmit="return confirm('Marcar todas as {{ bills|length - paid_count }} contas pendentes como pagas?')">
+      <input type="hidden" name="month" value="{{ month }}">
+      <input type="hidden" name="year" value="{{ year }}">
+      <button type="submit" class="btn btn-success btn-sm">
+        <i class="bi bi-check2-all"></i> Todas pagas
+      </button>
+    </form>
+    {% endif %}
+    <a href="/planner?month={{ month }}&year={{ year }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-lightbulb"></i> Ver Planejador
+    </a>
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-arrow-down-circle-fill"></i></div>
+      <div class="stat-value text-success">R$ {{ "%.2f"|format(total_inc)|replace('.', ',') }}</div>
+      <div class="stat-label">Total que entra</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle-fill"></i></div>
+      <div class="stat-value text-danger">R$ {{ "%.2f"|format(total_bill)|replace('.', ',') }}</div>
+      <div class="stat-label">
+        Total de contas
+        {% if total_inc > 0 %}
+        {% set commitment_pct = (total_bill / total_inc * 100) %}
+        <span class="badge ms-1 {% if commitment_pct > 80 %}bg-danger{% elif commitment_pct > 60 %}bg-warning text-dark{% else %}bg-success{% endif %}" style="font-size:.7rem">
+          {{ "%.0f"|format(commitment_pct) }}% da renda
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon {% if balance >= 0 %}text-info{% else %}text-warning{% endif %}">
+        <i class="bi bi-piggy-bank-fill"></i>
+      </div>
+      <div class="stat-value {% if balance >= 0 %}text-info{% else %}text-warning{% endif %}">
+        R$ {{ "%.2f"|format(balance)|replace('.', ',') }}
+      </div>
+      <div class="stat-label">Sobra por mês</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-primary"><i class="bi bi-check2-circle"></i></div>
+      <div class="stat-value text-primary">{{ paid_count }}/{{ bills|length }}</div>
+      <div class="stat-label">Contas pagas</div>
+    </div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="card p-3 mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="fw-semibold"><i class="bi bi-list-check text-primary me-2"></i>Progresso do mês</span>
+    <span class="text-muted small">{{ paid_count }} de {{ bills|length }} contas pagas (R$ {{ "%.2f"|format(total_paid) }})</span>
+  </div>
+  <div class="progress" style="height:10px;">
+    <div class="progress-bar bg-success" style="width:{{ bills_progress }}%"></div>
+  </div>
+  {% if bills %}
+  <div class="d-flex justify-content-between mt-1">
+    <small class="text-muted">R$ 0</small>
+    <small class="text-success fw-semibold">{{ bills_progress }}%</small>
+    <small class="text-muted">R$ {{ "%.2f"|format(total_bill) }}</small>
+  </div>
+  {% endif %}
+
+  {% if total_inc > 0 %}
+  {% set cp = [(total_bill / total_inc * 100), 100]|min %}
+  <hr class="border-secondary border-opacity-25 my-2">
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <span class="small text-muted"><i class="bi bi-percent me-1"></i>Comprometimento da renda</span>
+    <span class="small fw-semibold {% if cp > 80 %}text-danger{% elif cp > 60 %}text-warning{% else %}text-success{% endif %}">
+      {{ "%.1f"|format(cp) }}%
+    </span>
+  </div>
+  <div class="progress" style="height:8px;">
+    <div class="progress-bar {% if cp > 80 %}bg-danger{% elif cp > 60 %}bg-warning{% else %}bg-success{% endif %}"
+         style="width:{{ cp }}%"></div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Alertas -->
+  <div class="col-lg-6">
+
+    {% if overdue %}
+    <div class="alert-box alert-danger-box mb-3">
+      <div class="alert-box-title"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Vencidas ({{ overdue|length }})</div>
+      {% for b in overdue %}
+      <div class="alert-bill-item">
+        <span>{{ b['name'] }}</span>
+        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if upcoming %}
+    <div class="alert-box alert-warning-box mb-3">
+      <div class="alert-box-title"><i class="bi bi-clock-fill text-warning me-2"></i>Vencem em 7 dias ({{ upcoming|length }})</div>
+      {% for b in upcoming %}
+      <div class="alert-bill-item">
+        <span>{{ b['name'] }}</span>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-secondary">dia {{ b['due_day'] }}</span>
+          <span class="text-warning fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not overdue and not upcoming %}
+    <div class="alert-box alert-success-box mb-3">
+      <div class="d-flex align-items-center gap-2 py-2">
+        <i class="bi bi-check-circle-fill text-success fs-5"></i>
+        <span class="text-success">Nenhuma conta urgente no momento!</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Próximas contas -->
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="fw-semibold"><i class="bi bi-receipt text-primary me-2"></i>Contas do mês</span>
+        <a href="/bills" class="btn btn-sm btn-outline-primary">Ver todas</a>
+      </div>
+      {% for b in bills[:8] %}
+      {% set is_paid_d = b['id'] in paid_ids %}
+      {% set pay_rec = payment_map.get(b['id']) %}
+      <div class="d-flex align-items-center gap-2 py-2 border-bottom border-secondary border-opacity-25">
+
+        <!-- Botão pagar/desmarcar -->
+        {% if is_paid_d %}
+        <form method="POST" action="/unpay" class="d-inline flex-shrink-0">
+          <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="redirect_to" value="dashboard">
+          <button type="submit" class="check-btn check-paid" title="Clique para desmarcar">
+            <i class="bi bi-check-lg"></i>
+          </button>
+        </form>
+        {% else %}
+        <button class="check-btn check-empty flex-shrink-0" title="Marcar como paga"
+                onclick="openDashPayModal({{ b['id'] }}, {{ b['name']|tojson }}, {{ b['amount'] }})">
+          <i class="bi bi-circle"></i>
+        </button>
+        {% endif %}
+
+        <!-- Prioridade + info -->
+        <span class="priority-dot priority-{{ b['priority'] }} flex-shrink-0"></span>
+        <div class="flex-grow-1 min-width-0">
+          <div class="small fw-semibold {% if is_paid_d %}text-muted text-decoration-line-through{% endif %} d-flex align-items-center gap-1 flex-wrap">
+            {{ b['name'] }}
+            {% if b['total_installments'] %}
+              {% set pc = bill_pay_counts.get(b['id'], 0) %}
+              <span class="badge {% if is_paid_d %}bg-success{% else %}bg-primary{% endif %}" style="font-size:.65rem">
+                {% if is_paid_d %}{{ pc }}{% else %}{{ pc + 1 }}{% endif %}/{{ b['total_installments'] }}
+              </span>
+            {% endif %}
+          </div>
+          <div class="small text-muted">
+            dia {{ b['due_day'] }} · {{ categories[b['category']][0] if b['category'] in categories else b['category'] }}
+            {% if is_paid_d and pay_rec and pay_rec['income_source'] %}
+            · <span class="text-success">{{ pay_rec['income_source'] }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Valor + ações -->
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          <span class="small fw-bold {% if is_paid_d %}text-muted{% endif %}">
+            R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
+          </span>
+          {% if not is_paid_d %}
+          <button class="btn-icon" style="font-size:0.8rem"
+                  onclick="openAdvanceModal({{ b['id'] }}, {{ b['name']|tojson }}, {{ b['amount'] }})"
+                  title="Adiantar parcelas">
+            <i class="bi bi-forward-fill text-info"></i>
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if bills|length > 8 %}
+      <div class="text-center mt-2">
+        <a href="/bills" class="text-muted small">+ {{ bills|length - 8 }} mais</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Gráfico + Fontes de renda -->
+  <div class="col-lg-6">
+    <div class="card p-3 mb-3">
+      <div class="fw-semibold mb-3"><i class="bi bi-pie-chart text-primary me-2"></i>Gastos por categoria</div>
+      {% if cat_data %}
+      <canvas id="catChart" height="200"></canvas>
+      {% else %}
+      <div class="text-center text-muted py-4">
+        <i class="bi bi-bar-chart fs-2 d-block mb-2"></i>
+        Adicione contas para ver o gráfico
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="fw-semibold"><i class="bi bi-cash-coin text-success me-2"></i>Fontes de renda</span>
+        <a href="/incomes" class="btn btn-sm btn-outline-success">Gerenciar</a>
+      </div>
+      {% if incomes %}
+        {% for i in incomes %}
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-25">
+          <div>
+            <div class="small fw-semibold">{{ i['name'] }}</div>
+            <div class="small text-muted">Recebe no dia {{ i['day_of_month'] }}</div>
+          </div>
+          <span class="text-success fw-bold">R$ {{ "%.2f"|format(i['amount']) }}</span>
+        </div>
+        {% endfor %}
+        <div class="d-flex justify-content-between pt-2">
+          <span class="small text-muted">Total mensal</span>
+          <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_inc) }}</span>
+        </div>
+      {% else %}
+      <div class="text-center text-muted py-3">
+        <i class="bi bi-cash-coin fs-3 d-block mb-2"></i>
+        <a href="/incomes/add" class="btn btn-sm btn-success">Adicionar renda</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Pay Modal (dashboard) -->
+<div class="modal fade" id="dashPayModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h6 class="modal-title"><i class="bi bi-check2-circle text-success me-2"></i>Registrar pagamento</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/pay">
+        <div class="modal-body">
+          <input type="hidden" name="bill_id" id="dashPayBillId">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="redirect_to" value="dashboard">
+          <div class="fw-semibold small mb-3" id="dashPayBillName"></div>
+          <div class="mb-2">
+            <label class="form-label small text-muted">Pago com qual renda</label>
+            <select name="income_source" class="form-select form-select-sm">
+              <option value="">— selecione —</option>
+              {% for i in incomes %}
+              <option value="{{ i['name'] }}">{{ i['name'] }}</option>
+              {% endfor %}
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted">Valor pago (R$)</label>
+            <input type="number" name="amount_paid" id="dashPayAmount"
+                   class="form-control form-control-sm" step="0.01" min="0">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted">Data do pagamento</label>
+            <input type="date" name="paid_date" class="form-control form-control-sm"
+                   value="{{ now.strftime('%Y-%m-%d') }}">
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-check-lg"></i> Confirmar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Advance Payment Modal -->
+<div class="modal fade" id="advanceModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h6 class="modal-title"><i class="bi bi-forward-fill text-info me-2"></i>Adiantar parcelas</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/pay/advance">
+        <div class="modal-body">
+          <input type="hidden" name="bill_id" id="advBillId">
+          <div class="fw-semibold small mb-3" id="advBillName"></div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Quantos meses adiantar</label>
+            <select class="form-select form-select-sm" id="advMonthCount">
+              <option value="1">1 mês</option>
+              <option value="2">2 meses</option>
+              <option value="3">3 meses</option>
+              <option value="6">6 meses</option>
+              <option value="12">12 meses</option>
+            </select>
+          </div>
+          <div id="advRows"></div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-info fw-semibold">
+            <i class="bi bi-check-lg"></i> Confirmar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if cat_data %}
+fetch('/api/chart-data').then(r => r.json()).then(data => {
+  const ctx = document.getElementById('catChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: data.labels,
+      datasets: [{
+        data: data.values,
+        backgroundColor: data.colors,
+        borderColor: '#1e293b',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#94a3b8', padding: 12, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` R$ ${ctx.raw.toFixed(2).replace('.', ',')} — ${ctx.label}`
+          }
+        }
+      }
+    }
+  });
+});
+{% endif %}
+
+// Dashboard pay modal
+function openDashPayModal(billId, billName, billAmount) {
+  document.getElementById('dashPayBillId').value = billId;
+  document.getElementById('dashPayBillName').textContent = billName;
+  document.getElementById('dashPayAmount').value = billAmount.toFixed(2);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('dashPayModal')).show();
+}
+
+// Advance payment modal
+let _advAmount = 0;
+const _MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const _curMonth = {{ month }};
+const _curYear  = {{ year }};
+
+function openAdvanceModal(billId, billName, billAmount) {
+  document.getElementById('advBillId').value = billId;
+  document.getElementById('advBillName').textContent = billName;
+  _advAmount = billAmount;
+  document.getElementById('advMonthCount').value = '1';
+  _updateAdvRows();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('advanceModal')).show();
+}
+
+function _updateAdvRows() {
+  const count = parseInt(document.getElementById('advMonthCount').value);
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    let m = _curMonth + i + 1;
+    let y = _curYear;
+    while (m > 12) { m -= 12; y++; }
+    html += `<div class="d-flex align-items-center gap-2 mb-2">
+      <span class="small text-muted" style="min-width:54px">${_MONTHS[m-1]}/${y}</span>
+      <input type="hidden" name="months[]" value="${m}">
+      <input type="hidden" name="years[]" value="${y}">
+      <input type="number" name="amounts[]" class="form-control form-control-sm"
+             value="${_advAmount.toFixed(2)}" step="0.01" min="0">
+    </div>`;
+  }
+  document.getElementById('advRows').innerHTML = html;
+}
+
+document.getElementById('advMonthCount').addEventListener('change', _updateAdvRows);
+</script>
+{% endblock %}

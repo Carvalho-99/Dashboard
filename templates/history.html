@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Histórico{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-clock-history text-primary me-2"></i>Histórico de pagamentos</h4>
+</div>
+
+{% if grouped %}
+  {% for (yr, mo), data in grouped.items() %}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center border-secondary">
+      <span class="fw-bold">
+        {% set months = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'] %}
+        <i class="bi bi-calendar3 me-2 text-primary"></i>{{ months[mo] }} {{ yr }}
+      </span>
+      <span class="text-success fw-bold">R$ {{ "%.2f"|format(data.total)|replace('.', ',') }} pagos</span>
+    </div>
+    <div class="card-body p-0">
+      {% for p in data.payments %}
+      <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary border-opacity-25">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <div>
+            <div class="small fw-semibold">{{ p['bill_name'] or 'Conta removida' }}</div>
+            <div class="small text-muted">
+              {{ p['paid_date'] }}
+              {% if p['income_source'] %}· via {{ p['income_source'] }}{% endif %}
+              {% if p['notes'] %}· {{ p['notes'] }}{% endif %}
+            </div>
+          </div>
+        </div>
+        <span class="fw-bold text-success">R$ {{ "%.2f"|format(p['amount_paid'])|replace('.', ',') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-clock-history fs-1 d-block mb-3 opacity-25"></i>
+  <p>Nenhum pagamento registrado ainda.</p>
+  <a href="/bills" class="btn btn-primary btn-sm">Ver contas</a>
+</div>
+{% endif %}
+{% endblock %}

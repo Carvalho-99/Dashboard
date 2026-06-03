@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Planejador{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-lightbulb text-warning me-2"></i>Planejador Inteligente</h4>
+    <small class="text-muted">Estratégia otimizada de pagamentos</small>
+  </div>
+
+  <!-- Seletor de mês -->
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <select name="month" class="form-select form-select-sm" style="width:140px;">
+      {% for m, mname in months_list %}
+      <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ mname }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}" style="width:80px;">
+    <button type="submit" class="btn btn-sm btn-primary">Ver</button>
+  </form>
+</div>
+
+<!-- Cards de resumo -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-arrow-down-circle"></i></div>
+      <div class="stat-value text-success">R$ {{ "%.2f"|format(plan.total_income)|replace('.', ',') }}</div>
+      <div class="stat-label">Total de entrada</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle"></i></div>
+      <div class="stat-value text-danger">R$ {{ "%.2f"|format(plan.total_bills)|replace('.', ',') }}</div>
+      <div class="stat-label">Total de contas</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
+        <i class="bi bi-piggy-bank"></i>
+      </div>
+      <div class="stat-value {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
+        R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
+      </div>
+      <div class="stat-label">
+        Economia mensal
+        {% if plan.total_income > 0 %}
+        <span class="text-muted">({{ "%.0f"|format(plan.savings_pct) }}%)</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon {% if plan.projected_left >= reserve %}text-success{% else %}text-warning{% endif %}">
+        <i class="bi bi-wallet2"></i>
+      </div>
+      <div class="stat-value {% if plan.projected_left >= reserve %}text-success{% else %}text-warning{% endif %}">
+        R$ {{ "%.2f"|format(plan.projected_left)|replace('.', ',') }}
+      </div>
+      <div class="stat-label">Saldo projetado</div>
+    </div>
+  </div>
+</div>
+
+<!-- Dica do planejador -->
+{% if plan.tip %}
+<div class="alert alert-{{ plan.tip.color }} border-0 d-flex gap-2 align-items-start mb-4">
+  <i class="bi bi-{{ plan.tip.icon }} mt-1 flex-shrink-0"></i>
+  <span>{{ plan.tip.text }}</span>
+</div>
+{% endif %}
+
+<!-- Meta de economia -->
+{% if plan.goal_status %}
+<div class="card p-3 mb-4 {% if plan.goal_status.ok %}border-success{% else %}border-warning{% endif %} border-opacity-50">
+  <div class="d-flex gap-3 align-items-center">
+    {% if plan.goal_status.ok %}
+    <i class="bi bi-trophy-fill text-success fs-4"></i>
+    <div>
+      <div class="fw-semibold text-success">Meta atingida!</div>
+      <small class="text-muted">Você vai economizar R$ {{ "%.2f"|format(plan.goal_status.diff) }} a mais do que sua meta de R$ {{ "%.2f"|format(goal) }}.</small>
+    </div>
+    {% else %}
+    <i class="bi bi-target text-warning fs-4"></i>
+    <div>
+      <div class="fw-semibold text-warning">Falta R$ {{ "%.2f"|format(plan.goal_status.diff) }} para atingir a meta</div>
+      <small class="text-muted">Meta de economia: R$ {{ "%.2f"|format(goal) }} por mês</small>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Avisos -->
+{% if plan.warnings %}
+<div class="mb-4">
+  <div class="fw-semibold mb-2 text-muted small text-uppercase">
+    <i class="bi bi-exclamation-triangle me-1"></i>Alertas ({{ plan.warnings|length }})
+  </div>
+  {% for w in plan.warnings %}
+  <div class="warning-item warning-{{ w.level }} mb-2">
+    {% if w.level == 'danger' %}<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+    {% else %}<i class="bi bi-exclamation-circle-fill text-warning me-2"></i>{% endif %}
+    {{ w.message }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Contas antecipadas -->
+{% if plan.early_bills %}
+<div class="card p-3 mb-4 border-warning border-opacity-50">
+  <div class="fw-semibold mb-2">
+    <i class="bi bi-calendar-x text-warning me-2"></i>Contas que vencem antes do primeiro recebimento
+  </div>
+  {% for b in plan.early_bills %}
+  <div class="d-flex justify-content-between align-items-center py-1">
+    <div class="d-flex align-items-center gap-2">
+      <span class="priority-dot priority-{{ b['priority'] }}"></span>
+      <span class="small">{{ b['name'] }}</span>
+      <span class="badge bg-warning text-dark small">dia {{ b['due_day'] }}</span>
+    </div>
+    <span class="text-warning fw-bold small">R$ {{ "%.2f"|format(b['amount']) }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Passos do plano -->
+{% if plan.steps %}
+<div class="fw-semibold mb-3">
+  <i class="bi bi-list-ol text-primary me-2"></i>Plano de pagamentos
+</div>
+
+{% for step in plan.steps %}
+<div class="planner-step mb-3">
+  <!-- Header do step -->
+  {% set carryover = step.balance_after + step.bills_total - step.income.amount %}
+  {% set total_avail = step.balance_after + step.bills_total %}
+  <div class="planner-step-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div class="d-flex align-items-center gap-3">
+        <div class="step-number">{{ loop.index }}</div>
+        <div>
+          <div class="fw-bold">
+            Quando receber: <span class="text-success">{{ step.income.name }}</span>
+          </div>
+          {% if carryover > 0.01 %}
+          <div class="d-flex align-items-center gap-1 flex-wrap mt-1">
+            <small class="text-success">+ R$ {{ "%.2f"|format(step.income.amount)|replace('.', ',') }}</small>
+            <small class="text-muted">+</small>
+            <small class="text-info">R$ {{ "%.2f"|format(carryover)|replace('.', ',') }} acumulado</small>
+            <small class="text-muted">=</small>
+            <small class="fw-semibold text-white">R$ {{ "%.2f"|format(total_avail)|replace('.', ',') }} disponível</small>
+          </div>
+          <small class="text-muted">Dia {{ step.income.day_of_month }}</small>
+          {% else %}
+          <small class="text-muted">Dia {{ step.income.day_of_month }} — Recebe R$ {{ "%.2f"|format(step.income.amount)|replace('.', ',') }}</small>
+          {% endif %}
+        </div>
+      </div>
+      <div class="text-end">
+        <div class="small text-muted">Saldo após pagar</div>
+        <div class="fw-bold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
+          R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Barra de balanço -->
+    <div class="mt-2">
+      {% set base = total_avail if total_avail > 0 else 1 %}
+      {% set pct = [(step.bills_total / base * 100), 100]|min %}
+      <div class="d-flex justify-content-between mb-1">
+        <small class="text-muted">Contas: R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}</small>
+        <small class="text-muted">{{ "%.0f"|format(pct) }}% do disponível</small>
+      </div>
+      <div class="progress" style="height:6px;">
+        <div class="progress-bar {% if pct > 80 %}bg-danger{% elif pct > 60 %}bg-warning{% else %}bg-success{% endif %}"
+             style="width:{{ pct }}%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contas a pagar -->
+  {% if step.bills_to_pay %}
+  <div class="planner-step-body">
+    {% set ns = namespace(bal = step.balance_after + step.bills_total) %}
+    {% for b in step.bills_to_pay %}
+    {% set is_paid = b['id'] in paid_ids %}
+    {% set urgency = step.urgency.get(b['id'], 'normal') %}
+    {% set ns.bal = ns.bal - b['amount'] %}
+    <div class="planner-bill {% if is_paid %}planner-bill-paid{% endif %}">
+      <div class="d-flex align-items-center gap-2">
+        <span class="priority-dot priority-{{ b['priority'] }}"></span>
+        <div>
+          <span class="small fw-semibold {% if is_paid %}text-muted text-decoration-line-through{% endif %}">
+            {{ b['name'] }}
+          </span>
+          <div class="d-flex gap-2 mt-1 flex-wrap">
+            <span class="badge bg-secondary-subtle text-muted small">dia {{ b['due_day'] }}</span>
+            {% if urgency == 'danger' and not is_paid %}
+            <span class="badge bg-danger-subtle text-danger small">Urgente</span>
+            {% elif urgency == 'warning' and not is_paid %}
+            <span class="badge bg-warning-subtle text-warning small">Em breve</span>
+            {% endif %}
+            {% if is_paid %}<span class="badge bg-success-subtle text-success small"><i class="bi bi-check"></i> Pago</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="text-end">
+        <div class="fw-bold small {% if is_paid %}text-muted{% else %}text-white{% endif %}">
+          - R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
+        </div>
+        <div class="small {% if ns.bal >= 0 %}text-success{% else %}text-danger{% endif %}" style="font-size:.7rem">
+          → R$ {{ "%.2f"|format(ns.bal)|replace('.', ',') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Total do step -->
+    <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top border-secondary border-opacity-25">
+      <span class="small text-muted">Saldo após pagar tudo</span>
+      <span class="fw-bold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
+        R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
+      </span>
+    </div>
+  </div>
+  {% else %}
+  <div class="planner-step-body py-2 px-3">
+    <div class="d-flex align-items-center gap-2 text-muted small">
+      <i class="bi bi-arrow-right-circle text-info flex-shrink-0"></i>
+      <span>
+        Saldo de <strong class="text-info">R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}</strong>
+        {% if not loop.last %}
+          — somado com <strong class="text-success">{{ plan.steps[loop.index].income.name }}</strong>
+          (dia {{ plan.steps[loop.index].income.day_of_month }})
+        {% else %}
+          — livre ao final do mês
+        {% endif %}
+      </span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Contas adiadas -->
+  {% if step.bills_deferred %}
+  <div class="planner-step-deferred">
+    <i class="bi bi-exclamation-triangle text-danger me-1"></i>
+    <strong>Adiadas por falta de saldo:</strong>
+    {% for b in step.bills_deferred %}
+    <span class="badge bg-danger ms-1">{{ b['name'] }} (R$ {{ "%.2f"|format(b['amount']) }})</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<!-- Sem plano -->
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-lightbulb fs-1 d-block mb-3 opacity-25"></i>
+  {% if not incomes %}
+  <p>Cadastre suas rendas para ver o plano.</p>
+  <a href="/incomes/add" class="btn btn-success"><i class="bi bi-plus-lg"></i> Adicionar renda</a>
+  {% elif not bills %}
+  <p>Cadastre suas contas para ver o plano.</p>
+  <a href="/bills/add" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Adicionar conta</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Contas já pagas este mês -->
+{% if plan.paid_bills %}
+<div class="card p-3 mt-4 border-success border-opacity-25">
+  <div class="fw-semibold mb-2 text-success">
+    <i class="bi bi-check-all me-2"></i>Já pago este mês ({{ plan.paid_bills|length }} conta(s))
+  </div>
+  {% for b in plan.paid_bills %}
+  <div class="d-flex justify-content-between align-items-center py-1">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-check-circle-fill text-success small"></i>
+      <span class="small text-muted text-decoration-line-through">{{ b['name'] }}</span>
+    </div>
+    <span class="small text-muted">R$ {{ "%.2f"|format(b['amount']) }}</span>
+  </div>
+  {% endfor %}
+  <div class="d-flex justify-content-between pt-2 mt-1 border-top border-success border-opacity-25">
+    <span class="small text-muted">Total pago</span>
+    <span class="text-success fw-bold">R$ {{ "%.2f"|format(plan.total_paid)|replace('.', ',') }}</span>
+  </div>
+</div>
+{% endif %}
+
+<!-- Reserve info -->
+<div class="card p-3 mt-3 border-secondary border-opacity-25">
+  <div class="d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-shield-check text-primary"></i>
+      <div>
+        <div class="small fw-semibold">Reserva de segurança</div>
+        <div class="small text-muted">Valor mínimo mantido em conta após cada pagamento</div>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="fw-bold text-primary">R$ {{ "%.2f"|format(reserve) }}</span>
+      <a href="/settings" class="btn btn-sm btn-outline-secondary">Alterar</a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

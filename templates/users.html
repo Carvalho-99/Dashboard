@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Usuários{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-people text-primary me-2"></i>Usuários</h4>
+  <a href="/couples" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-heart-fill text-pink me-1"></i> Gerenciar Casais
+  </a>
+</div>
+
+{% if users %}
+<div class="mb-4">
+  {% for u in users %}
+  <div class="bill-row d-flex align-items-center justify-content-between mb-2">
+    <div class="d-flex align-items-center gap-3">
+      <span class="user-avatar-lg" style="background:{{ u['color'] }}">{{ u['name'][0].upper() }}</span>
+      <div>
+        <div class="fw-semibold">{{ u['name'] }}</div>
+        <small class="text-muted">Criado em {{ u['created_at'][:10] if u['created_at'] else '' }}</small>
+      </div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      {% if session_uid == u['id'] %}
+      <span class="badge bg-primary-subtle text-primary">Ativo</span>
+      {% endif %}
+      <a href="/switch/{{ u['id'] }}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-person-check"></i> Selecionar
+      </a>
+      <form method="POST" action="/users/delete/{{ u['id'] }}"
+            onsubmit="return confirm('Remover ' + {{ u['name']|tojson }} + '? Suas contas não serão apagadas.')">
+        <button type="submit" class="btn-icon btn-icon-danger" title="Remover">
+          <i class="bi bi-trash"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card p-4">
+  <div class="fw-semibold mb-3">
+    <i class="bi bi-person-plus text-success me-2"></i>Adicionar usuário
+  </div>
+  <form method="POST" action="/users/add">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Nome</label>
+      <input type="text" name="name" class="form-control"
+             placeholder="Ex: Bruno, Melissa, Mãe, Pai..." required autofocus>
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Cor</label>
+      <div class="d-flex gap-2 flex-wrap">
+        {% for c in colors %}
+        <label class="color-option">
+          <input type="radio" name="color" value="{{ c }}" {% if loop.first %}checked{% endif %}>
+          <span class="color-dot" style="background:{{ c }}"></span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success w-100">
+      <i class="bi bi-plus-lg"></i> Criar usuário
+    </button>
+  </form>
+</div>
+
+<div class="card p-3 mt-3 border-info border-opacity-25">
+  <small class="text-muted">
+    <i class="bi bi-info-circle text-info me-1"></i>
+    Crie um perfil para cada pessoa. Depois, em
+    <a href="/couples" class="text-info">Gerenciar Casais</a>,
+    selecione quais perfis formam cada casal — você pode ter o casal
+    <strong>Bruno & Melissa</strong> e separadamente <strong>Mãe & Pai</strong>.
+  </small>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.color-option input').forEach(inp => {
+  inp.addEventListener('change', () => {
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('color-dot-selected'));
+    if (inp.checked) inp.nextElementSibling.classList.add('color-dot-selected');
+  });
+  if (inp.checked) inp.nextElementSibling.classList.add('color-dot-selected');
+});
+</script>
+{% endblock %}

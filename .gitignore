@@ -1,0 +1,33 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Banco de dados (dados pessoais)
+financas.db
+*.db
+
+# Compilado / distribuição
+comprador/
+build_temp/
+icone.ico
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log

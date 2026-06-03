@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}{% if action == 'add' %}Nova conta{% else %}Editar conta{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <a href="/bills" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+      <h4 class="mb-0 fw-bold">
+        {% if action == 'add' %}
+        <i class="bi bi-plus-circle text-primary me-2"></i>Nova conta
+        {% else %}
+        <i class="bi bi-pencil text-warning me-2"></i>Editar conta
+        {% endif %}
+      </h4>
+    </div>
+
+    <div class="card p-4">
+      <form method="POST">
+
+        <!-- Pertence a -->
+        {% if all_users or couples %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Pertence a</label>
+          <div class="d-flex gap-2 flex-wrap">
+
+            <!-- Pessoal: cada usuário -->
+            {% for u in all_users %}
+            <label class="owner-option">
+              <input type="radio" name="owner_id" value="{{ u.id }}"
+                     {% if default_owner == u.id|string %}checked{% endif %}>
+              <span class="owner-badge" data-color="{{ u.color }}">
+                <span class="user-avatar-xs" style="background:{{ u.color }}">{{ u.name[0].upper() }}</span>
+                {{ u.name }}
+              </span>
+            </label>
+            {% endfor %}
+
+            <!-- Compartilhado: cada casal -->
+            {% for c in couples %}
+            <label class="owner-option">
+              <input type="radio" name="owner_id" value="couple_{{ c.id }}"
+                     {% if default_owner == 'couple_' ~ c.id %}checked{% endif %}>
+              <span class="owner-badge owner-couple">
+                <i class="bi bi-heart-fill text-pink"></i>
+                {{ c.display_name }}
+              </span>
+            </label>
+            {% endfor %}
+
+            <!-- Sem dono (geral) -->
+            {% if not all_users and not couples %}
+            <label class="owner-option">
+              <input type="radio" name="owner_id" value="0" checked>
+              <span class="owner-badge owner-couple">
+                <i class="bi bi-people-fill"></i> Geral
+              </span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <input type="hidden" name="owner_id" value="0">
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome da conta *</label>
+          <input type="text" name="name" class="form-control"
+                 value="{{ bill['name'] if bill else '' }}"
+                 placeholder="Ex: Aluguel, Netflix, Conta de luz..."
+                 required autofocus>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold">Valor (R$) *</label>
+            <input type="text" name="amount" class="form-control"
+                   value="{{ '%.2f'|format(bill['amount'])|replace('.',',') if bill else '' }}"
+                   placeholder="0,00" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold">Vence todo dia *</label>
+            <input type="number" name="due_day" class="form-control"
+                   value="{{ bill['due_day'] if bill else '' }}"
+                   min="1" max="31" placeholder="Ex: 5" required>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold">Categoria</label>
+            <select name="category" class="form-select">
+              {% for key, (label, icon, color) in categories.items() %}
+              <option value="{{ key }}"
+                {% if bill and bill['category'] == key %}selected{% endif %}>
+                {{ label }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold">Prioridade</label>
+            <select name="priority" class="form-select">
+              {% for p, (label, badge) in priorities.items() %}
+              <option value="{{ p }}"
+                {% if bill and bill['priority'] == p %}selected
+                {% elif not bill and p == 3 %}selected{% endif %}>
+                {{ label }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_recurring" id="recurring"
+                   {% if not bill or bill['is_recurring'] %}checked{% endif %}>
+            <label class="form-check-label" for="recurring">Conta mensal recorrente</label>
+          </div>
+        </div>
+
+        <div class="priority-guide mb-3">
+          <small class="text-muted d-block mb-2">Guia de prioridades:</small>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="priority-tag priority-1-tag">Crítico — Aluguel, água, luz</span>
+            <span class="priority-tag priority-2-tag">Importante — Internet, saúde</span>
+            <span class="priority-tag priority-3-tag">Normal — Streaming, academia</span>
+            <span class="priority-tag priority-4-tag">Opcional — Lazer, extras</span>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" name="has_end_date" id="has_end_date"
+                   {% if bill and bill['end_month'] %}checked{% endif %}>
+            <label class="form-check-label" for="has_end_date">
+              Esta conta tem data de encerramento <small class="text-muted">(parcelas, financiamentos...)</small>
+            </label>
+          </div>
+          <div id="end_date_fields" {% if not bill or not bill['end_month'] %}style="display:none"{% endif %}>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label small text-muted">Mês de encerramento</label>
+                <select name="end_month" class="form-select form-select-sm">
+                  <option value="">—</option>
+                  {% for mn in range(1, 13) %}
+                  <option value="{{ mn }}" {% if bill and bill['end_month'] == mn %}selected{% endif %}>
+                    {{ ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mn-1] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted">Ano</label>
+                <input type="number" name="end_year" class="form-control form-control-sm"
+                       min="{{ now.year }}" max="2040"
+                       value="{{ bill['end_year'] if bill and bill['end_year'] else now.year }}">
+              </div>
+            </div>
+            <small class="text-muted mt-1 d-block">
+              <i class="bi bi-info-circle me-1"></i>A conta para de aparecer após esse mês.
+            </small>
+          </div>
+        </div>
+
+        <!-- Parcelado -->
+        <div class="mb-3">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" name="has_installments" id="has_installments"
+                   {% if bill and bill['total_installments'] %}checked{% endif %}>
+            <label class="form-check-label" for="has_installments">
+              Conta parcelada <small class="text-muted">(remove automaticamente após pagar todas)</small>
+            </label>
+          </div>
+          <div id="installments_fields" {% if not bill or not bill['total_installments'] %}style="display:none"{% endif %}>
+            <div class="row g-2 align-items-end">
+              <div class="col-6">
+                <label class="form-label small text-muted">Total de parcelas</label>
+                <input type="number" name="total_installments" id="total_installments_input"
+                       class="form-control form-control-sm" min="1" max="360"
+                       value="{{ bill['total_installments'] if bill and bill['total_installments'] else '' }}"
+                       placeholder="Ex: 12">
+              </div>
+              {% if bill and bill['total_installments'] and bill_paid_count %}
+              <div class="col-6 pb-1">
+                <small class="text-muted">
+                  <i class="bi bi-check-circle text-success me-1"></i>Já pagas: <strong>{{ bill_paid_count }}</strong> de {{ bill['total_installments'] }}
+                </small>
+              </div>
+              {% endif %}
+            </div>
+            <small class="text-muted mt-1 d-block">
+              <i class="bi bi-info-circle me-1"></i>A conta é removida automaticamente após a última parcela.
+            </small>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Observações</label>
+          <textarea name="notes" class="form-control" rows="2"
+                    placeholder="Informações adicionais (opcional)...">{{ bill['notes'] if bill and bill['notes'] else '' }}</textarea>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary flex-grow-1">
+            {% if action == 'add' %}
+            <i class="bi bi-plus-lg"></i> Adicionar conta
+            {% else %}
+            <i class="bi bi-check-lg"></i> Salvar alterações
+            {% endif %}
+          </button>
+          <a href="/bills" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+const hasEndDate = document.getElementById('has_end_date');
+const endFields  = document.getElementById('end_date_fields');
+if (hasEndDate) {
+  hasEndDate.addEventListener('change', () => {
+    endFields.style.display = hasEndDate.checked ? '' : 'none';
+  });
+}
+
+const hasInstallments = document.getElementById('has_installments');
+const installFields   = document.getElementById('installments_fields');
+if (hasInstallments) {
+  hasInstallments.addEventListener('change', () => {
+    installFields.style.display = hasInstallments.checked ? '' : 'none';
+    if (hasInstallments.checked) {
+      document.getElementById('total_installments_input').focus();
+    }
+  });
+}
+
+document.querySelectorAll('.owner-option input').forEach(inp => {
+  function update() {
+    document.querySelectorAll('.owner-badge').forEach(b => b.classList.remove('owner-badge-selected'));
+    if (inp.checked) inp.nextElementSibling.classList.add('owner-badge-selected');
+  }
+  inp.addEventListener('change', () => {
+    document.querySelectorAll('.owner-option input').forEach(i =>
+      i.nextElementSibling.classList.remove('owner-badge-selected')
+    );
+    update();
+  });
+  if (inp.checked) update();
+});
+</script>
+{% endblock %}
+{% endblock %}

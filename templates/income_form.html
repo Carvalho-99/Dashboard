@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}{% if action == 'add' %}Nova renda{% else %}Editar renda{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <a href="/incomes" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+      <h4 class="mb-0 fw-bold">
+        {% if action == 'add' %}
+        <i class="bi bi-plus-circle text-success me-2"></i>Nova fonte de renda
+        {% else %}
+        <i class="bi bi-pencil text-warning me-2"></i>Editar renda
+        {% endif %}
+      </h4>
+    </div>
+
+    <div class="card p-4">
+      <form method="POST">
+
+        <!-- Pertence a -->
+        {% if all_users %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Pertence a</label>
+          <div class="d-flex gap-2 flex-wrap">
+            <label class="owner-option">
+              <input type="radio" name="owner_id" value="0"
+                     {% if not default_uid or default_uid == 0 %}checked{% endif %}>
+              <span class="owner-badge owner-couple">
+                <i class="bi bi-people-fill"></i> Geral
+              </span>
+            </label>
+            {% for u in all_users %}
+            <label class="owner-option">
+              <input type="radio" name="owner_id" value="{{ u.id }}"
+                     {% if default_uid == u.id %}checked{% endif %}>
+              <span class="owner-badge" style="--owner-color: {{ u.color }}">
+                <span class="user-avatar-xs" style="background:{{ u.color }}">
+                  {{ u.name[0].upper() }}
+                </span>
+                {{ u.name }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <input type="hidden" name="owner_id" value="0">
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome *</label>
+          <input type="text" name="name" class="form-control"
+                 value="{{ income['name'] if income else '' }}"
+                 placeholder="Ex: Salário, Vale Alimentação..."
+                 required autofocus>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Tipo</label>
+          <select name="type" class="form-select">
+            {% for key, label in income_types.items() %}
+            <option value="{{ key }}"
+              {% if income and income['type'] == key %}selected
+              {% elif not income and key == 'salary' %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-7">
+            <label class="form-label fw-semibold">Valor (R$) *</label>
+            <input type="text" name="amount" class="form-control"
+                   value="{{ '%.2f'|format(income['amount'])|replace('.',',') if income else '' }}"
+                   placeholder="0,00" required>
+          </div>
+          <div class="col-5">
+            <label class="form-label fw-semibold">Recebe dia *</label>
+            <input type="number" name="day_of_month" class="form-control"
+                   value="{{ income['day_of_month'] if income else '' }}"
+                   min="1" max="31" placeholder="Ex: 5" required>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Observações</label>
+          <input type="text" name="notes" class="form-control"
+                 value="{{ income['notes'] if income and income['notes'] else '' }}"
+                 placeholder="Opcional">
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success flex-grow-1">
+            {% if action == 'add' %}
+            <i class="bi bi-plus-lg"></i> Adicionar renda
+            {% else %}
+            <i class="bi bi-check-lg"></i> Salvar alterações
+            {% endif %}
+          </button>
+          <a href="/incomes" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Atalhos -->
+    <div class="card p-3 mt-3 border-secondary border-opacity-25">
+      <small class="text-muted d-block mb-2 fw-semibold">Atalhos:</small>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-sm btn-outline-secondary example-btn"
+                data-name="Salário" data-type="salary">💼 Salário</button>
+        <button class="btn btn-sm btn-outline-secondary example-btn"
+                data-name="Vale Alimentação" data-type="vale">💳 Vale Alimentação</button>
+        <button class="btn btn-sm btn-outline-secondary example-btn"
+                data-name="Vale Refeição" data-type="vale">🍽️ Vale Refeição</button>
+        <button class="btn btn-sm btn-outline-secondary example-btn"
+                data-name="Freelance" data-type="other">💻 Freelance</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.example-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelector('[name=name]').value = btn.dataset.name;
+    document.querySelector('[name=type]').value = btn.dataset.type;
+  });
+});
+
+document.querySelectorAll('.owner-option input').forEach(inp => {
+  function update() {
+    document.querySelectorAll('.owner-badge').forEach(b => b.classList.remove('owner-badge-selected'));
+    if (inp.checked) inp.nextElementSibling.classList.add('owner-badge-selected');
+  }
+  inp.addEventListener('change', () => {
+    document.querySelectorAll('.owner-option input').forEach(i =>
+      i.nextElementSibling.classList.remove('owner-badge-selected')
+    );
+    update();
+  });
+  if (inp.checked) update();
+});
+</script>
+{% endblock %}

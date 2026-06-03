@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Configurações{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+    <h4 class="fw-bold mb-4"><i class="bi bi-gear text-secondary me-2"></i>Configurações</h4>
+
+    <div class="card p-4">
+      <form method="POST">
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-shield-check text-primary me-2"></i>Reserva de segurança (R$)
+          </label>
+          <input type="number" name="reserve_amount" class="form-control"
+                 value="{{ reserve }}" step="50" min="0">
+          <small class="text-muted mt-1 d-block">
+            Valor mínimo que o planejador sempre tenta manter em conta após cada pagamento.
+            Recomendado: R$ 200 a R$ 500.
+          </small>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-trophy text-warning me-2"></i>Meta de economia mensal (R$)
+          </label>
+          <input type="number" name="savings_goal" class="form-control"
+                 value="{{ goal }}" step="50" min="0">
+          <small class="text-muted mt-1 d-block">
+            Quanto você quer guardar por mês. O planejador vai mostrar se você está atingindo essa meta.
+            Deixe 0 para desativar.
+          </small>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-check-lg me-1"></i> Salvar configurações
+        </button>
+      </form>
+    </div>
+
+    <!-- Sobre -->
+    <div class="card p-3 mt-3 border-secondary border-opacity-25">
+      <small class="text-muted">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>Organizador Financeiro</strong> — Seus dados são armazenados localmente no arquivo
+        <code>financas.db</code> na pasta do programa. Nenhum dado é enviado para a internet.
+      </small>
+    </div>
+  </div>
+</div>
+{% endblock %}

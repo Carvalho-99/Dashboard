@@ -1,0 +1,140 @@
+╔══════════════════════════════════════════════════════════╗
+║          ORGANIZADOR FINANCEIRO — GUIA DE USO           ║
+╚══════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMO INSTALAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Extraia (descompacte) esta pasta em qualquer lugar do seu PC
+   Sugestão: C:\OrganizadorFinanceiro\
+
+2. Não mova os arquivos de dentro da pasta — mantenha tudo junto.
+
+3. Pronto. Não precisa instalar mais nada.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMO ABRIR O PROGRAMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Dê duplo clique em: Organizador Financeiro.exe
+
+  O navegador abre automaticamente em alguns segundos.
+  O programa roda em segundo plano — não aparece nenhuma
+  janela, não precisa fazer nada além de usar o navegador.
+
+  Se o navegador não abrir sozinho, abra o Chrome ou Edge
+  e acesse: http://localhost:5050
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PRIMEIRA VEZ — CONFIGURAÇÃO INICIAL (5 minutos)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Passo 1 — Criar os perfis de usuário
+  • Clique no ícone ⚙ (engrenagem) no canto superior direito
+    OU acesse: http://localhost:5050/users
+  • Clique em "Criar usuário"
+  • Adicione um perfil para cada pessoa (ex: João, Maria)
+  • Escolha uma cor para cada um
+
+Passo 2 — Criar o casal (opcional, mas recomendado)
+  • Na mesma tela, clique em "Gerenciar Casais"
+  • Clique em "Criar novo casal"
+  • Selecione os dois perfis e clique em criar
+  • O casal aparece na aba "❤ Casal" do menu
+
+Passo 3 — Cadastrar as rendas
+  • No menu, clique em "Rendas"
+  • Clique em "Adicionar renda"
+  • Cadastre o salário (informe o dia que recebe)
+  • Se tiver vale alimentação, cadastre também como renda separada
+  • Repita para cada pessoa do casal
+
+Passo 4 — Cadastrar as contas fixas
+  • No menu, clique em "Contas"
+  • Clique em "Nova conta"
+  • Cadastre cada conta que paga todo mês:
+    aluguel, água, luz, internet, streaming, etc.
+  • Informe o valor, o dia do vencimento e a prioridade:
+    → Crítico    = Aluguel, água, luz (paga sempre primeiro)
+    → Importante = Internet, saúde
+    → Normal     = Streaming, academia
+    → Opcional   = Lazer, extras
+
+Passo 5 — Ver o planejamento
+  • Clique em "Planejador" no menu
+  • O programa vai mostrar automaticamente:
+    → Quais contas pagar com o salário
+    → Quais contas pagar com o vale
+    → Quanto sobra no final do mês
+    → Avisos se alguma conta não couber no orçamento
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  USO DO DIA A DIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Abrir o programa:  duplo clique em Organizador Financeiro.exe
+• Usar o programa:   pelo navegador normalmente
+• Terminou de usar:  feche o navegador (ou a aba)
+• Abrir de novo:     duplo clique em Organizador Financeiro.exe novamente
+
+• Quando pagar uma conta:
+  → Vá em "Contas" → clique no círculo ao lado da conta
+  → Confirme o valor e a data → clique em "Confirmar pagamento"
+
+• Consultar o histórico de pagamentos: menu "Histórico"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACESSAR PELO CELULAR (mesmo WiFi)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Abra o programa normalmente (duplo clique em Organizador Financeiro.exe).
+   No navegador, olhe o endereço que aparece em tela ou
+   tente: http://192.168.X.X:5050 (troque X.X pelo IP do seu PC).
+   Para saber o IP do PC: Menu Iniciar → "cmd" → digite: ipconfig
+   Procure "Endereço IPv4" (ex: 192.168.0.10)
+
+2. No celular (conectado ao mesmo WiFi), abra o navegador
+   e digite esse endereço.
+
+3. O programa abre igual ao PC.
+
+ATENÇÃO: O PC precisa estar ligado e com o programa aberto
+para acessar pelo celular.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ONDE FICAM MEUS DADOS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Todos os seus dados ficam no arquivo:
+  financas.db  (dentro desta mesma pasta)
+
+• Para fazer backup: copie esse arquivo para um pendrive
+• Para restaurar: coloque o arquivo de volta na pasta
+• Os dados NÃO são enviados para a internet
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PROBLEMAS COMUNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"Não abre o navegador automaticamente"
+  → Abra o Chrome/Edge manualmente e acesse: http://localhost:5050
+
+"Aviso de segurança do Windows ao abrir o programa"
+  → Clique em "Mais informações" → "Executar assim mesmo"
+  → Isso acontece porque o Windows desconfia de arquivos
+    baixados da internet. O programa é seguro.
+
+"Celular não consegue acessar"
+  → Confirme que o celular está no mesmo WiFi que o PC
+  → O programa precisa estar aberto no PC
+  → Abra o Chrome/Edge e acesse: http://SEU-IP:5050
+     Para saber seu IP: Menu Iniciar → "cmd" → ipconfig → IPv4
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

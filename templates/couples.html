@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Casais{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/users" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold"><i class="bi bi-heart-fill text-pink me-2"></i>Gerenciar Casais</h4>
+</div>
+
+<!-- Casais existentes -->
+{% if couples %}
+<div class="mb-4">
+  {% for c in couples %}
+  <div class="person-card mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="couple-icon">
+          <i class="bi bi-heart-fill text-pink"></i>
+        </div>
+        <div>
+          <div class="fw-bold">{{ c.display_name }}</div>
+          <small class="text-muted">{{ c.members|length }} membro(s)</small>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="/switch-couple/{{ c.id }}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-eye"></i> Ver casal
+        </a>
+        <form method="POST" action="/couples/delete/{{ c.id }}"
+              onsubmit="return confirm('Remover casal {{ c.display_name }}?')">
+          <button class="btn-icon btn-icon-danger"><i class="bi bi-trash"></i></button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Membros -->
+    <div class="d-flex gap-2 flex-wrap">
+      {% for m in c.members %}
+      <div class="d-flex align-items-center gap-2 px-3 py-1 rounded-pill"
+           style="background: {{ m.color }}20; border: 1px solid {{ m.color }}40">
+        <span class="user-avatar" style="background:{{ m.color }}">{{ m.name[0].upper() }}</span>
+        <span class="small fw-semibold" style="color:{{ m.color }}">{{ m.name }}</span>
+      </div>
+      {% endfor %}
+      {% if not c.members %}
+      <span class="text-muted small">Sem membros</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Criar novo casal -->
+<div class="card p-4">
+  <div class="fw-semibold mb-3">
+    <i class="bi bi-plus-circle text-pink me-2"></i>Criar novo casal
+  </div>
+
+  {% if users|length < 2 %}
+  <div class="alert alert-warning border-0 d-flex gap-2 align-items-center">
+    <i class="bi bi-exclamation-circle"></i>
+    Você precisa de pelo menos 2 usuários para criar um casal.
+    <a href="/users" class="ms-2 btn btn-sm btn-warning">Criar usuários</a>
+  </div>
+  {% else %}
+  <form method="POST" action="/couples/add">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Nome do casal</label>
+      <input type="text" name="name" class="form-control"
+             placeholder="Deixe em branco para gerar automaticamente (Ex: Bruno & Melissa)">
+      <small class="text-muted">Opcional — será gerado automaticamente a partir dos membros.</small>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label fw-semibold">Selecione os membros *</label>
+      <div class="d-flex gap-2 flex-wrap" id="memberPicker">
+        {% for u in users %}
+        <label class="member-option">
+          <input type="checkbox" name="member_ids" value="{{ u.id }}">
+          <span class="member-badge" style="--mc: {{ u.color }}">
+            <span class="user-avatar" style="background:{{ u.color }}">{{ u.name[0].upper() }}</span>
+            {{ u.name }}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">
+      <i class="bi bi-heart-fill text-pink me-1"></i> Criar casal
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card p-3 mt-3 border-info border-opacity-25">
+  <small class="text-muted">
+    <i class="bi bi-info-circle text-info me-1"></i>
+    Cada casal tem sua própria visão combinada de contas e planejamento.
+    Você pode criar vários casais — por exemplo: <strong>Bruno & Melissa</strong> e <strong>Mãe & Pai</strong>.
+    Contas compartilhadas ficam vinculadas ao casal específico.
+  </small>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.member-option input').forEach(inp => {
+  inp.addEventListener('change', () => {
+    inp.nextElementSibling.classList.toggle('member-badge-selected', inp.checked);
+  });
+});
+</script>
+{% endblock %}

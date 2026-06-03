@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}Casal{% endblock %}
+
+{% block content %}
+
+{% if mode == 'picker' %}
+<!-- ===== PICKER MODE ===== -->
+<div class="text-center py-4 mb-4">
+  <i class="bi bi-heart-fill text-pink" style="font-size:3rem"></i>
+  <h4 class="fw-bold mt-3">Visão do Casal</h4>
+  <p class="text-muted">Selecione um casal para ver a visão combinada.</p>
+</div>
+
+{% if couples %}
+<div class="row justify-content-center g-3 mb-4">
+  {% for c in couples %}
+  <div class="col-md-4">
+    <a href="/switch-couple/{{ c.id }}" class="couple-card-link">
+      <div class="couple-picker-card">
+        <div class="couple-picker-icon"><i class="bi bi-heart-fill text-pink"></i></div>
+        <div class="fw-bold mt-2">{{ c.display_name }}</div>
+        <div class="d-flex justify-content-center gap-2 mt-2">
+          {% for m in c.members %}
+          <span class="user-avatar" style="background:{{ m.color }}" title="{{ m.name }}">
+            {{ m.name[0].upper() }}
+          </span>
+          {% endfor %}
+        </div>
+        <div class="small text-muted mt-2">{{ c.members|length }} membros</div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="text-center">
+  <a href="/couples" class="btn btn-primary">
+    <i class="bi bi-plus-lg"></i> {% if couples %}Gerenciar casais{% else %}Criar primeiro casal{% endif %}
+  </a>
+</div>
+
+{% else %}
+<!-- ===== VIEW MODE ===== -->
+
+<!-- Header com seletor de casal -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-3">
+    <div class="couple-icon-lg">
+      <i class="bi bi-heart-fill text-pink"></i>
+    </div>
+    <div>
+      <h4 class="mb-0 fw-bold">{{ active_couple.display_name }}</h4>
+      <small class="text-muted">{{ month_name }} {{ year }}</small>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <!-- Seletor de casal (se houver mais de um) -->
+    {% if couples|length > 1 %}
+    <div class="d-flex gap-1">
+      {% for c in couples %}
+      <a href="/switch-couple/{{ c.id }}"
+         class="couple-pill {% if c.id == cid %}couple-pill-active{% endif %}">
+        {% for m in c.members %}
+        <span class="user-avatar-xs" style="background:{{ m.color }}">{{ m.name[0].upper() }}</span>
+        {% endfor %}
+        <span class="d-none d-md-inline ms-1 small">{{ c.display_name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <a href="/couples" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-gear"></i>
+    </a>
+    <a href="/bills/add" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-plus-lg"></i> Conta
+    </a>
+  </div>
+</div>
+
+<!-- Stat cards gerais -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-success"><i class="bi bi-arrow-down-circle"></i></div>
+      <div class="stat-value text-success">R$ {{ "%.2f"|format(total_income)|replace('.', ',') }}</div>
+      <div class="stat-label">Renda total</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle"></i></div>
+      <div class="stat-value text-danger">R$ {{ "%.2f"|format(total_bills)|replace('.', ',') }}</div>
+      <div class="stat-label">Total de contas</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
+        <i class="bi bi-piggy-bank"></i>
+      </div>
+      <div class="stat-value {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
+        R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
+      </div>
+      <div class="stat-label">Sobra juntos</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon text-pink"><i class="bi bi-heart-fill"></i></div>
+      <div class="stat-value" style="color:var(--pink)">R$ {{ "%.2f"|format(shared_total)|replace('.', ',') }}</div>
+      <div class="stat-label">Contas do casal</div>
+    </div>
+  </div>
+</div>
+
+<!-- Cards por pessoa -->
+<div class="row g-3 mb-4">
+  {% for m in active_couple.members %}
+  {% set stats = user_stats.get(m.id, {}) %}
+  <div class="col-md-6">
+    <div class="person-card" style="border-top: 3px solid {{ m.color }}">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <span class="user-avatar-lg" style="background:{{ m.color }}">{{ m.name[0].upper() }}</span>
+        <div>
+          <div class="fw-bold">{{ m.name }}</div>
+          <small class="text-muted">
+            {{ stats.get('bills_count', 0) }} contas ·
+            {{ stats.get('paid_count', 0) }} pagas
+          </small>
+        </div>
+        <a href="/switch/{{ m.id }}" class="btn btn-sm btn-outline-secondary ms-auto">
+          Ver só {{ m.name }}
+        </a>
+      </div>
+
+      <div class="row g-2 mb-2">
+        <div class="col-4 text-center">
+          <div class="small text-muted">Renda</div>
+          <div class="fw-bold text-success">R$ {{ "%.2f"|format(stats.get('income', 0)) }}</div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="small text-muted">Contas</div>
+          <div class="fw-bold text-danger">R$ {{ "%.2f"|format(stats.get('bills', 0)) }}</div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="small text-muted">Sobra</div>
+          {% set sav = stats.get('savings', 0) %}
+          <div class="fw-bold {% if sav >= 0 %}text-success{% else %}text-danger{% endif %}">
+            R$ {{ "%.2f"|format(sav) }}
+          </div>
+        </div>
+      </div>
+
+      {% if stats.get('income', 0) > 0 %}
+      {% set cp = [(stats.get('bills', 0) / stats.get('income', 1) * 100), 100]|min %}
+      <div>
+        <div class="d-flex justify-content-between mb-1">
+          <small class="text-muted">Comprometimento</small>
+          <small class="{% if cp > 80 %}text-danger{% elif cp > 60 %}text-warning{% else %}text-success{% endif %}">
+            {{ "%.0f"|format(cp) }}%
+          </small>
+        </div>
+        <div class="progress" style="height:4px;">
+          <div class="progress-bar {% if cp > 80 %}bg-danger{% elif cp > 60 %}bg-warning{% else %}bg-success{% endif %}"
+               style="width:{{ cp }}%"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Contas desta pessoa -->
+      {% set ub = user_bills.get(m.id, []) %}
+      {% if ub %}
+      <div class="mt-2">
+        {% for b in ub[:5] %}
+        <div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary border-opacity-15">
+          <div class="d-flex align-items-center gap-2">
+            <span class="priority-dot priority-{{ b['priority'] }}"></span>
+            <span class="small {% if b['id'] in paid_ids %}text-muted text-decoration-line-through{% endif %}">
+              {{ b['name'] }}
+            </span>
+            {% if b['id'] in paid_ids %}
+            <i class="bi bi-check-circle-fill text-success" style="font-size:0.7rem"></i>
+            {% endif %}
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="small fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+            {% if b['id'] not in paid_ids %}
+            <button class="check-btn check-empty" style="width:22px;height:22px;font-size:0.65rem"
+                    data-bs-toggle="modal" data-bs-target="#cpay{{ b['id'] }}">
+              <i class="bi bi-circle"></i>
+            </button>
+            {% else %}
+            <form method="POST" action="/unpay">
+              <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+              <input type="hidden" name="month" value="{{ month }}">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="redirect_to" value="couple">
+              <button type="submit" class="check-btn check-paid" style="width:22px;height:22px;font-size:0.65rem">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% if ub|length > 5 %}
+        <a href="/switch/{{ m.id }}" class="small text-muted d-block text-center mt-1">
+          + {{ ub|length - 5 }} mais
+        </a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="text-center text-muted small mt-2">Sem contas pessoais</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Contas compartilhadas do casal -->
+<div class="mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="fw-semibold">
+      <i class="bi bi-heart-fill text-pink me-2"></i>Contas compartilhadas do casal
+    </div>
+    <a href="/bills/add" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-plus-lg"></i> Adicionar
+    </a>
+  </div>
+
+  {% if shared_bills %}
+    {% for b in shared_bills %}
+    {% set is_paid = b['id'] in paid_ids %}
+    <div class="bill-row {% if is_paid %}bill-paid{% endif %} mb-2">
+      <div class="d-flex align-items-center gap-3">
+        <div class="priority-bar priority-{{ b['priority'] }}"></div>
+
+        {% if is_paid %}
+        <form method="POST" action="/unpay" class="d-inline">
+          <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="redirect_to" value="couple">
+          <button type="submit" class="check-btn check-paid"><i class="bi bi-check-lg"></i></button>
+        </form>
+        {% else %}
+        <button class="check-btn check-empty" data-bs-toggle="modal" data-bs-target="#cpay{{ b['id'] }}">
+          <i class="bi bi-circle"></i>
+        </button>
+        {% endif %}
+
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="fw-semibold {% if is_paid %}text-muted text-decoration-line-through{% endif %}">
+              {{ b['name'] }}
+            </span>
+            <span class="badge badge-priority-{{ b['priority'] }} small">{{ priorities[b['priority']][0] }}</span>
+            <span class="badge" style="background:rgba(236,72,153,0.12);color:var(--pink);border:1px solid rgba(236,72,153,0.3)">
+              <i class="bi bi-heart-fill"></i> {{ active_couple.display_name }}
+            </span>
+          </div>
+          <small class="text-muted">
+            Vence dia {{ b['due_day'] }} · {{ categories[b['category']][0] if b['category'] in categories else b['category'] }}
+          </small>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold">R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}</span>
+          <a href="/bills/edit/{{ b['id'] }}" class="btn-icon"><i class="bi bi-pencil"></i></a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex justify-content-end pt-1">
+      <small class="text-muted me-2">Total compartilhado:</small>
+      <span class="fw-bold" style="color:var(--pink)">R$ {{ "%.2f"|format(shared_total) }}</span>
+    </div>
+
+  {% else %}
+  <div class="card p-4 text-center text-muted">
+    <i class="bi bi-heart fs-2 d-block mb-2 opacity-25"></i>
+    <p class="small mb-2">Nenhuma conta compartilhada ainda.</p>
+    <a href="/bills/add" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-plus-lg"></i> Adicionar conta do casal
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Alertas -->
+{% if overdue or upcoming %}
+<div class="row g-3 mb-4">
+  {% if overdue %}
+  <div class="col-md-6">
+    <div class="alert-box alert-danger-box">
+      <div class="alert-box-title">
+        <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Vencidas ({{ overdue|length }})
+      </div>
+      {% for b in overdue %}
+      <div class="alert-bill-item">
+        <div class="d-flex align-items-center gap-2">
+          {% if b['owner_name'] %}
+          <span class="user-avatar-xs" style="background:{{ b['owner_color'] or '#6b7280' }}">
+            {{ b['owner_name'][0].upper() }}
+          </span>
+          {% else %}
+          <i class="bi bi-heart-fill text-pink" style="font-size:0.7rem"></i>
+          {% endif %}
+          <span>{{ b['name'] }}</span>
+        </div>
+        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if upcoming %}
+  <div class="col-md-6">
+    <div class="alert-box alert-warning-box">
+      <div class="alert-box-title">
+        <i class="bi bi-clock-fill text-warning me-1"></i>Próximas ({{ upcoming|length }})
+      </div>
+      {% for b in upcoming %}
+      <div class="alert-bill-item">
+        <div class="d-flex align-items-center gap-2">
+          {% if b['owner_name'] %}
+          <span class="user-avatar-xs" style="background:{{ b['owner_color'] or '#6b7280' }}">
+            {{ b['owner_name'][0].upper() }}
+          </span>
+          {% else %}
+          <i class="bi bi-heart-fill text-pink" style="font-size:0.7rem"></i>
+          {% endif %}
+          <span>{{ b['name'] }}</span>
+        </div>
+        <span class="text-warning fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Resumo planejador -->
+<div class="card p-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="fw-semibold">
+      <i class="bi bi-lightbulb text-warning me-2"></i>Planejamento combinado
+    </span>
+    <a href="/planner" class="btn btn-sm btn-outline-warning">Ver detalhado</a>
+  </div>
+
+  {% if plan.tip %}
+  <div class="alert alert-{{ plan.tip.color }} border-0 d-flex gap-2 align-items-center py-2 mb-3">
+    <i class="bi bi-{{ plan.tip.icon }}"></i>
+    <small>{{ plan.tip.text }}</small>
+  </div>
+  {% endif %}
+
+  <div class="row g-2">
+    <div class="col-4 text-center">
+      <div class="small text-muted">Renda</div>
+      <div class="fw-bold text-success">R$ {{ "%.2f"|format(plan.total_income) }}</div>
+    </div>
+    <div class="col-4 text-center">
+      <div class="small text-muted">Contas</div>
+      <div class="fw-bold text-danger">R$ {{ "%.2f"|format(plan.total_bills) }}</div>
+    </div>
+    <div class="col-4 text-center">
+      <div class="small text-muted">Sobra</div>
+      <div class="fw-bold {% if plan.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
+        R$ {{ "%.2f"|format(plan.savings) }}
+      </div>
+    </div>
+  </div>
+
+  {% if plan.warnings %}
+  <div class="mt-3">
+    {% for w in plan.warnings[:2] %}
+    <div class="warning-item warning-{{ w.level }} mb-1">
+      <small><i class="bi bi-exclamation-triangle me-1"></i>{{ w.message }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% endif %} {# end mode == view #}
+
+<!-- Modais de pagamento (todos os bills da view) -->
+{% if mode == 'view' %}
+{% for b in all_bills %}
+{% if b['id'] not in paid_ids %}
+<div class="modal fade" id="cpay{{ b['id'] }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h6 class="modal-title small">Pagar: {{ b['name'] }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/pay">
+        <div class="modal-body">
+          <input type="hidden" name="bill_id" value="{{ b['id'] }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="redirect_to" value="couple">
+          <div class="mb-2">
+            <label class="form-label small text-muted">Valor (R$)</label>
+            <input type="number" name="amount_paid" class="form-control form-control-sm"
+                   value="{{ b['amount'] }}" step="0.01">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted">Data</label>
+            <input type="date" name="paid_date" class="form-control form-control-sm"
+                   value="{{ now.strftime('%Y-%m-%d') }}">
+          </div>
+          <div>
+            <label class="form-label small text-muted">Pago por</label>
+            <select name="income_source" class="form-select form-select-sm">
+              <option value="">— selecione —</option>
+              {% for i in incomes_all %}
+              <option value="{{ i['name'] }}">{{ i['name'] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-success">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% endblock %}
