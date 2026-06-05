@@ -223,11 +223,19 @@
     {% endfor %}
 
     <!-- Total do step -->
-    <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top border-secondary border-opacity-25">
-      <span class="small text-muted">Saldo após pagar tudo</span>
-      <span class="fw-bold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
-        R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
-      </span>
+    <div class="border-top border-secondary border-opacity-25 pt-2 mt-1">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="small text-muted"><i class="bi bi-receipt me-1"></i>Total a pagar nesta janela</span>
+        <span class="fw-bold text-danger">
+          - R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}
+        </span>
+      </div>
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="small text-muted">Saldo após pagar tudo</span>
+        <span class="fw-bold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
+          R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
+        </span>
+      </div>
     </div>
   </div>
   {% else %}
