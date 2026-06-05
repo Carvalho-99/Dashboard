@@ -20,13 +20,15 @@ class SmartPlanner:
 
     def generate_plan(self, month, year, incomes, bills,
                       paid_ids=None, reserve=300, savings_goal=0,
-                      deferred_ids=None, next_month_ids=None):
+                      deferred_ids=None, next_month_ids=None, advance_ids=None):
         if paid_ids is None:
             paid_ids = set()
         if deferred_ids is None:
             deferred_ids = set()
         if next_month_ids is None:
             next_month_ids = set()
+        if advance_ids is None:
+            advance_ids = set()
 
         if not incomes:
             return self._empty_plan(bills, paid_ids)
@@ -78,11 +80,21 @@ class SmartPlanner:
                     windows[natural_idx]['freed_bills'].append(bill)
                     next_idx = natural_idx + 1
                 else:
-                    next_idx = 0  # conta antecipada adiada vai pra janela 0
+                    next_idx = 0
 
                 if next_idx < len(windows):
                     windows[next_idx]['bills'].append(bill)
-                # else: sem próxima janela → tratada como próximo mês (excluída)
+                # else: sem próxima janela → excluída (tratada como próximo mês)
+
+            elif bill['id'] in advance_ids:
+                # Adiantada: move para a janela anterior à natural
+                if natural_idx is not None and natural_idx > 0:
+                    windows[natural_idx - 1]['bills'].append(bill)
+                elif natural_idx == 0:
+                    windows[0]['bills'].append(bill)
+                else:
+                    windows[0]['bills'].append(bill)
+
             else:
                 if natural_idx is not None:
                     windows[natural_idx]['bills'].append(bill)

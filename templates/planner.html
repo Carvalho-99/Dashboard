@@ -7,8 +7,6 @@
     <h4 class="mb-0 fw-bold"><i class="bi bi-lightbulb text-warning me-2"></i>Planejador Inteligente</h4>
     <small class="text-muted">Estratégia otimizada de pagamentos</small>
   </div>
-
-  <!-- Seletor de mês -->
   <form method="GET" class="d-flex gap-2 align-items-center">
     <select name="month" class="form-select form-select-sm" style="width:140px;">
       {% for m, mname in months_list %}
@@ -20,10 +18,9 @@
   </form>
 </div>
 
-<!-- Banner: modo simulação -->
 {% if is_simulation %}
 <div class="d-flex justify-content-between align-items-center mb-4 px-3 py-2 rounded-3"
-     style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.35);">
+     style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.35);">
   <div class="d-flex align-items-center gap-2">
     <i class="bi bi-lightning-fill text-warning"></i>
     <span class="fw-semibold text-warning">Simulação ativa</span>
@@ -48,7 +45,7 @@
     <div class="stat-card">
       <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle"></i></div>
       <div class="stat-value text-danger">R$ {{ "%.2f"|format(plan.total_bills)|replace('.', ',') }}</div>
-      <div class="stat-label">Total de contas{% if is_simulation %} <span class="badge bg-warning text-dark" style="font-size:.6rem">simulação</span>{% endif %}</div>
+      <div class="stat-label">Total de contas{% if is_simulation %} <span class="badge bg-warning text-dark" style="font-size:.6rem">sim</span>{% endif %}</div>
     </div>
   </div>
   <div class="col-6 col-lg-3">
@@ -59,12 +56,7 @@
       <div class="stat-value {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
         R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
       </div>
-      <div class="stat-label">
-        Economia mensal
-        {% if plan.total_income > 0 %}
-        <span class="text-muted">({{ "%.0f"|format(plan.savings_pct) }}%)</span>
-        {% endif %}
-      </div>
+      <div class="stat-label">Economia mensal{% if plan.total_income > 0 %} <span class="text-muted">({{ "%.0f"|format(plan.savings_pct) }}%)</span>{% endif %}</div>
     </div>
   </div>
   <div class="col-6 col-lg-3">
@@ -80,7 +72,6 @@
   </div>
 </div>
 
-<!-- Dica do planejador -->
 {% if plan.tip %}
 <div class="alert alert-{{ plan.tip.color }} border-0 d-flex gap-2 align-items-start mb-4">
   <i class="bi bi-{{ plan.tip.icon }} mt-1 flex-shrink-0"></i>
@@ -88,7 +79,6 @@
 </div>
 {% endif %}
 
-<!-- Meta de economia -->
 {% if plan.goal_status %}
 <div class="card p-3 mb-4 {% if plan.goal_status.ok %}border-success{% else %}border-warning{% endif %} border-opacity-50">
   <div class="d-flex gap-3 align-items-center">
@@ -109,7 +99,6 @@
 </div>
 {% endif %}
 
-<!-- Avisos -->
 {% if plan.warnings %}
 <div class="mb-4">
   <div class="fw-semibold mb-2 text-muted small text-uppercase">
@@ -125,12 +114,9 @@
 </div>
 {% endif %}
 
-<!-- Contas antecipadas -->
 {% if plan.early_bills %}
 <div class="card p-3 mb-4 border-warning border-opacity-50">
-  <div class="fw-semibold mb-2">
-    <i class="bi bi-calendar-x text-warning me-2"></i>Contas que vencem antes do primeiro recebimento
-  </div>
+  <div class="fw-semibold mb-2"><i class="bi bi-calendar-x text-warning me-2"></i>Contas que vencem antes do primeiro recebimento</div>
   {% for b in plan.early_bills %}
   <div class="d-flex justify-content-between align-items-center py-1">
     <div class="d-flex align-items-center gap-2">
@@ -151,10 +137,10 @@
 </div>
 
 {% for step in plan.steps %}
+{% set step_idx = loop.index0 %}
 {% set is_last_step = loop.last %}
 <div class="planner-step mb-3">
 
-  <!-- Header do step -->
   {% set carryover = step.balance_after + step.bills_total - step.income.amount %}
   {% set total_avail = step.balance_after + step.bills_total %}
   <div class="planner-step-header">
@@ -162,9 +148,7 @@
       <div class="d-flex align-items-center gap-3">
         <div class="step-number">{{ loop.index }}</div>
         <div>
-          <div class="fw-bold">
-            Quando receber: <span class="text-success">{{ step.income.name }}</span>
-          </div>
+          <div class="fw-bold">Quando receber: <span class="text-success">{{ step.income.name }}</span></div>
           {% if carryover > 0.01 %}
           <div class="d-flex align-items-center gap-1 flex-wrap mt-1">
             <small class="text-success">+ R$ {{ "%.2f"|format(step.income.amount)|replace('.', ',') }}</small>
@@ -186,8 +170,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Barra de balanço -->
     <div class="mt-2">
       {% set base = total_avail if total_avail > 0 else 1 %}
       {% set pct = [(step.bills_total / base * 100), 100]|min %}
@@ -202,13 +184,11 @@
     </div>
   </div>
 
-  <!-- Contas a pagar -->
   {% if step.bills_to_pay %}
   <div class="planner-step-body">
     {% set ns = namespace(bal = step.balance_after + step.bills_total) %}
     {% for b in step.bills_to_pay %}
     {% set is_paid = b['id'] in paid_ids %}
-    {% set is_deferred_here = b['id'] in deferred_ids %}
     {% set urgency = step.urgency.get(b['id'], 'normal') %}
     {% set ns.bal = ns.bal - b['amount'] %}
     <div class="planner-bill {% if is_paid %}planner-bill-paid{% endif %}">
@@ -218,27 +198,33 @@
           <span class="small fw-semibold {% if is_paid %}text-muted text-decoration-line-through{% endif %}">
             {{ b['name'] }}
           </span>
-          <div class="d-flex gap-2 mt-1 flex-wrap">
+          <div class="d-flex gap-1 mt-1 flex-wrap">
             <span class="badge bg-secondary-subtle text-muted small">dia {{ b['due_day'] }}</span>
-            {% if urgency == 'danger' and not is_paid %}
-            <span class="badge bg-danger-subtle text-danger small">Urgente</span>
-            {% elif urgency == 'warning' and not is_paid %}
-            <span class="badge bg-warning-subtle text-warning small">Em breve</span>
-            {% endif %}
+            {% if urgency == 'danger' and not is_paid %}<span class="badge bg-danger-subtle text-danger small">Urgente</span>{% endif %}
+            {% if urgency == 'warning' and not is_paid %}<span class="badge bg-warning-subtle text-warning small">Em breve</span>{% endif %}
             {% if is_paid %}<span class="badge bg-success-subtle text-success small"><i class="bi bi-check"></i> Pago</span>{% endif %}
-            {% if is_deferred_here %}
+            {% if b['id'] in deferred_ids %}
             <span class="badge d-inline-flex align-items-center gap-1"
-                  style="background:rgba(6,182,212,0.15);color:#06b6d4;border:1px solid rgba(6,182,212,0.3);font-size:.65rem">
+                  style="background:rgba(6,182,212,.15);color:#06b6d4;border:1px solid rgba(6,182,212,.3);font-size:.65rem">
               <i class="bi bi-skip-forward-fill"></i> Adiada
-              <button onclick="undefer({{ b['id'] }})"
+              <button class="sim-undefer" data-id="{{ b['id'] }}"
                       style="background:none;border:none;color:inherit;padding:0 0 0 2px;font-size:.75rem;cursor:pointer;line-height:1"
-                      title="Desfazer adiamento">×</button>
+                      title="Desfazer">×</button>
+            </span>
+            {% endif %}
+            {% if b['id'] in advance_ids %}
+            <span class="badge d-inline-flex align-items-center gap-1"
+                  style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.65rem">
+              <i class="bi bi-skip-backward-fill"></i> Adiantada
+              <button class="sim-undefer" data-id="{{ b['id'] }}"
+                      style="background:none;border:none;color:inherit;padding:0 0 0 2px;font-size:.75rem;cursor:pointer;line-height:1"
+                      title="Desfazer">×</button>
             </span>
             {% endif %}
           </div>
         </div>
       </div>
-      <div class="d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-1">
         <div class="text-end">
           <div class="fw-bold small {% if is_paid %}text-muted{% else %}text-white{% endif %}">
             - R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
@@ -247,10 +233,14 @@
             → R$ {{ "%.2f"|format(ns.bal)|replace('.', ',') }}
           </div>
         </div>
-        {% if not is_paid %}
-        <button class="btn-icon"
+        {% if not is_paid and b['id'] not in deferred_ids and b['id'] not in advance_ids %}
+        <button class="btn-icon defer-btn"
+                data-bill-id="{{ b['id'] }}"
+                data-bill-name="{{ b['name']|e }}"
+                data-bill-amount="{{ b['amount'] }}"
+                data-step-idx="{{ step_idx }}"
+                data-is-last="{{ 'true' if is_last_step else 'false' }}"
                 style="font-size:0.85rem;color:#f59e0b"
-                onclick="openDeferModal({{ b['id'] }}, {{ b['name']|tojson }}, {{ b['amount'] }}, {{ is_last_step|tojson }})"
                 title="Adiar esta conta">
           <i class="bi bi-skip-forward-fill"></i>
         </button>
@@ -259,35 +249,23 @@
     </div>
     {% endfor %}
 
-    <!-- Contas liberadas desta janela (simulação) -->
     {% if step.freed_bills %}
     <div class="d-flex align-items-start gap-2 mt-2 p-2 rounded-2"
-         style="background:rgba(245,158,11,0.07);border:1px dashed rgba(245,158,11,0.3);">
+         style="background:rgba(245,158,11,.07);border:1px dashed rgba(245,158,11,.3);">
       <i class="bi bi-arrow-up-right-circle-fill text-warning mt-1 flex-shrink-0" style="font-size:.85rem"></i>
       <div class="small">
-        <span class="text-warning fw-semibold">
-          Liberou R$ {{ "%.2f"|format(step.freed_total)|replace('.', ',') }} nesta janela
-        </span>
-        <span class="text-muted"> — </span>
-        <span class="text-muted">
-          {% for fb in step.freed_bills %}{{ fb['name'] }}{% if not loop.last %}, {% endif %}{% endfor %}
-          {% if is_last_step %}
-            foi(ram) movida(s) para o próximo mês.
-          {% else %}
-            foi(ram) adiada(s) para a próxima janela.
-          {% endif %}
+        <span class="text-warning fw-semibold">Liberou R$ {{ "%.2f"|format(step.freed_total)|replace('.', ',') }}</span>
+        <span class="text-muted"> — {{ step.freed_bills|map(attribute='name')|join(', ') }}
+          {% if is_last_step %}→ próximo mês{% else %}→ próxima janela{% endif %}
         </span>
       </div>
     </div>
     {% endif %}
 
-    <!-- Rodapé do step -->
     <div class="border-top border-secondary border-opacity-25 pt-2 mt-2">
       <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="small text-muted"><i class="bi bi-receipt me-1"></i>Total a pagar nesta janela</span>
-        <span class="fw-bold text-danger">
-          - R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}
-        </span>
+        <span class="fw-bold text-danger">- R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}</span>
       </div>
       <div class="d-flex justify-content-between align-items-center">
         <span class="small text-muted">Saldo após pagar tudo</span>
@@ -302,14 +280,11 @@
   <div class="planner-step-body py-2 px-3">
     {% if step.freed_bills %}
     <div class="d-flex align-items-start gap-2 mb-2 p-2 rounded-2"
-         style="background:rgba(245,158,11,0.07);border:1px dashed rgba(245,158,11,0.3);">
+         style="background:rgba(245,158,11,.07);border:1px dashed rgba(245,158,11,.3);">
       <i class="bi bi-arrow-up-right-circle-fill text-warning mt-1 flex-shrink-0" style="font-size:.85rem"></i>
       <div class="small">
-        <span class="text-warning fw-semibold">
-          Liberou R$ {{ "%.2f"|format(step.freed_total)|replace('.', ',') }} nesta janela
-        </span>
-        <span class="text-muted"> ({{ step.freed_bills|map(attribute='name')|join(', ') }}
-          {% if is_last_step %}→ próximo mês{% else %}→ próxima janela{% endif %})</span>
+        <span class="text-warning fw-semibold">Liberou R$ {{ "%.2f"|format(step.freed_total)|replace('.', ',') }}</span>
+        <span class="text-muted"> ({{ step.freed_bills|map(attribute='name')|join(', ') }} → {% if is_last_step %}próximo mês{% else %}próxima janela{% endif %})</span>
       </div>
     </div>
     {% endif %}
@@ -317,18 +292,13 @@
       <i class="bi bi-arrow-right-circle text-info flex-shrink-0"></i>
       <span>
         Saldo de <strong class="text-info">R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}</strong>
-        {% if not loop.last %}
-          — somado com <strong class="text-success">{{ plan.steps[loop.index].income.name }}</strong>
-          (dia {{ plan.steps[loop.index].income.day_of_month }})
-        {% else %}
-          — livre ao final do mês
-        {% endif %}
+        {% if not loop.last %}— somado com <strong class="text-success">{{ plan.steps[loop.index].income.name }}</strong> (dia {{ plan.steps[loop.index].income.day_of_month }})
+        {% else %}— livre ao final do mês{% endif %}
       </span>
     </div>
   </div>
   {% endif %}
 
-  <!-- Contas adiadas por saldo insuficiente (automático pelo planejador) -->
   {% if step.bills_deferred %}
   <div class="planner-step-deferred">
     <i class="bi bi-exclamation-triangle text-danger me-1"></i>
@@ -342,7 +312,6 @@
 {% endfor %}
 
 {% else %}
-<!-- Sem plano -->
 <div class="text-center py-5 text-muted">
   <i class="bi bi-lightbulb fs-1 d-block mb-3 opacity-25"></i>
   {% if not incomes %}
@@ -355,9 +324,8 @@
 </div>
 {% endif %}
 
-<!-- Contas deixadas para o próximo mês (simulação) -->
 {% if plan.next_month_bills %}
-<div class="card p-3 mt-4" style="border:1px solid rgba(6,182,212,0.3);background:rgba(6,182,212,0.05);">
+<div class="card p-3 mt-4" style="border:1px solid rgba(6,182,212,.3);background:rgba(6,182,212,.05);">
   <div class="fw-semibold mb-2 text-info">
     <i class="bi bi-calendar-arrow-forward me-2"></i>
     Deixadas para o próximo mês — simulação ({{ plan.next_month_bills|length }})
@@ -371,8 +339,7 @@
     </div>
     <div class="d-flex align-items-center gap-2">
       <span class="text-info fw-bold small">R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}</span>
-      <button class="btn-icon" style="font-size:.75rem;color:#94a3b8"
-              onclick="undefer({{ b['id'] }})" title="Desfazer">
+      <button class="btn-icon sim-undefer" data-id="{{ b['id'] }}" style="font-size:.75rem;color:#94a3b8" title="Desfazer">
         <i class="bi bi-x-circle"></i>
       </button>
     </div>
@@ -380,14 +347,11 @@
   {% endfor %}
   <div class="d-flex justify-content-between pt-2 mt-1">
     <span class="small text-muted">Total postergado</span>
-    <span class="text-info fw-bold">
-      R$ {{ "%.2f"|format(plan.next_month_bills|sum(attribute='amount'))|replace('.', ',') }}
-    </span>
+    <span class="text-info fw-bold">R$ {{ "%.2f"|format(plan.next_month_bills|sum(attribute='amount'))|replace('.', ',') }}</span>
   </div>
 </div>
 {% endif %}
 
-<!-- Contas já pagas este mês -->
 {% if plan.paid_bills %}
 <div class="card p-3 mt-4 border-success border-opacity-25">
   <div class="fw-semibold mb-2 text-success">
@@ -409,7 +373,6 @@
 </div>
 {% endif %}
 
-<!-- Reserve info -->
 <div class="card p-3 mt-3 border-secondary border-opacity-25">
   <div class="d-flex justify-content-between align-items-center">
     <div class="d-flex align-items-center gap-2">
@@ -426,105 +389,252 @@
   </div>
 </div>
 
-<!-- Modal: Adiar conta -->
+<!-- ======= MODAL: Adiar conta (2 etapas) ======= -->
 <div class="modal fade" id="deferModal" tabindex="-1">
   <div class="modal-dialog modal-sm">
     <div class="modal-content">
-      <div class="modal-header border-secondary">
-        <h6 class="modal-title">
-          <i class="bi bi-skip-forward-fill text-warning me-2"></i>Adiar conta
-        </h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <p class="small mb-1 text-muted">Conta selecionada:</p>
-        <p class="fw-semibold mb-1" id="deferBillName" style="color:#e2e8f0"></p>
-        <p class="text-danger fw-bold mb-3" id="deferBillAmount" style="font-size:.9rem"></p>
 
-        <div class="d-grid gap-2">
-          <!-- Próxima janela (oculto se for última janela) -->
-          <button id="btnNextWindow"
-                  class="btn btn-sm btn-outline-info d-flex align-items-center justify-content-start gap-2 py-2"
-                  onclick="confirmDefer('next')">
-            <i class="bi bi-arrow-right-circle-fill fs-5"></i>
-            <div class="text-start">
-              <div class="fw-semibold">Mover para a próxima janela</div>
-              <div style="font-size:.75rem;opacity:.8">Pagar com a próxima renda deste mês</div>
-            </div>
-          </button>
-
-          <!-- Próximo mês (sempre disponível) -->
-          <button class="btn btn-sm btn-outline-warning d-flex align-items-center justify-content-start gap-2 py-2"
-                  onclick="confirmDefer('skip')">
-            <i class="bi bi-calendar-arrow-forward fs-5"></i>
-            <div class="text-start">
-              <div class="fw-semibold">Deixar para o próximo mês</div>
-              <div style="font-size:.75rem;opacity:.8">Remove desta simulação agora</div>
-            </div>
-          </button>
+      <!-- ETAPA 1: Adiar -->
+      <div id="deferPanel1">
+        <div class="modal-header border-secondary">
+          <h6 class="modal-title">
+            <i class="bi bi-skip-forward-fill text-warning me-2"></i>Adiar conta
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-1">Conta selecionada:</p>
+          <p class="fw-semibold mb-0" id="deferBillName" style="color:#e2e8f0;font-size:1rem"></p>
+          <p class="text-danger fw-bold mb-4" id="deferBillAmount" style="font-size:.9rem"></p>
 
-        <p class="text-muted mt-3 mb-0" style="font-size:.72rem">
-          <i class="bi bi-info-circle me-1"></i>
-          Isso é uma simulação — nenhum dado é alterado. Use "Resetar" para voltar ao plano original.
-        </p>
+          <div class="d-grid gap-2">
+            <button id="btnNextWindow"
+                    class="btn btn-outline-info d-flex align-items-center justify-content-start gap-3 py-2 px-3"
+                    onclick="deferStep1('next')">
+              <i class="bi bi-arrow-right-circle-fill fs-4 flex-shrink-0"></i>
+              <div class="text-start">
+                <div class="fw-semibold small">Próxima janela deste mês</div>
+                <div style="font-size:.72rem;opacity:.8">Pagar com a próxima renda</div>
+              </div>
+            </button>
+            <button class="btn btn-outline-warning d-flex align-items-center justify-content-start gap-3 py-2 px-3"
+                    onclick="deferStep1('skip')">
+              <i class="bi bi-calendar-arrow-forward fs-4 flex-shrink-0"></i>
+              <div class="text-start">
+                <div class="fw-semibold small">Próximo mês</div>
+                <div style="font-size:.72rem;opacity:.8">Remove da simulação deste mês</div>
+              </div>
+            </button>
+          </div>
+          <p class="text-muted mt-3 mb-0" style="font-size:.72rem">
+            <i class="bi bi-info-circle me-1"></i>Simulação — nenhum dado é alterado.
+          </p>
+        </div>
       </div>
+
+      <!-- ETAPA 2: Adiantar substituta -->
+      <div id="deferPanel2" style="display:none">
+        <div class="modal-header border-secondary">
+          <h6 class="modal-title">
+            <i class="bi bi-arrow-left-right text-success me-2"></i>Quer colocar outra no lugar?
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-1">
+            Liberou <span id="freedAmountLabel" class="text-warning fw-semibold"></span> nesta janela.
+            Quer adiantar outra conta para este período?
+          </p>
+          <div id="advanceSuggestions" class="mt-2" style="max-height:260px;overflow-y:auto;"></div>
+          <div class="mt-3">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="applyDefer(null)">
+              Não, pode deixar o saldo livre
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
+
+<!-- Dados para o JS (sem aspas no onclick) -->
+<script id="plannerData" type="application/json">
+{
+  "totalSteps": {{ total_steps }},
+  "deferredIds": {{ deferred_ids | list | tojson }},
+  "advanceIds":  {{ advance_ids  | list | tojson }},
+  "steps": [
+    {% for step in plan.steps %}
+    {% set step_idx = loop.index0 %}
+    {
+      "idx": {{ step_idx }},
+      "bills": [
+        {% for b in step.bills_to_pay %}
+        { "id": {{ b['id'] }}, "name": {{ b['name']|tojson }}, "amount": {{ b['amount'] }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-let _deferBillId  = null;
-let _deferIsLast  = false;
+// ── dados do plano ──────────────────────────────────────────────────────────
+const _PD         = JSON.parse(document.getElementById('plannerData').textContent);
+const TOTAL_STEPS = _PD.totalSteps;
+const DEFER_IDS   = new Set(_PD.deferredIds);
+const ADV_IDS     = new Set(_PD.advanceIds);
 
-function openDeferModal(billId, billName, billAmount, isLastStep) {
-  _deferBillId = billId;
-  _deferIsLast = isLastStep;
-  document.getElementById('deferBillName').textContent   = billName;
-  document.getElementById('deferBillAmount').textContent = '- R$ ' + billAmount.toFixed(2).replace('.', ',');
-  document.getElementById('btnNextWindow').style.display  = isLastStep ? 'none' : '';
+// Monta lista plana de todas as contas com índice do step
+const ALL_BILLS = [];
+_PD.steps.forEach(s => s.bills.forEach(b => ALL_BILLS.push({ ...b, stepIdx: s.idx })));
+
+// ── estado do modal ─────────────────────────────────────────────────────────
+let _billId    = null;
+let _stepIdx   = null;
+let _isLast    = false;
+let _deferAct  = null;  // 'next' | 'skip'
+
+// ── abrir modal (via delegação de evento) ──────────────────────────────────
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.defer-btn');
+  if (!btn) return;
+  _billId  = parseInt(btn.dataset.billId);
+  _stepIdx = parseInt(btn.dataset.stepIdx);
+  _isLast  = btn.dataset.isLast === 'true';
+
+  document.getElementById('deferBillName').textContent   = btn.dataset.billName;
+  document.getElementById('deferBillAmount').textContent = '- R$ ' + parseFloat(btn.dataset.billAmount).toFixed(2).replace('.', ',');
+
+  document.getElementById('btnNextWindow').style.display = _isLast ? 'none' : '';
+  document.getElementById('deferPanel1').style.display   = '';
+  document.getElementById('deferPanel2').style.display   = 'none';
+
   bootstrap.Modal.getOrCreateInstance(document.getElementById('deferModal')).show();
+});
+
+// ── desfazer (× em badges) ─────────────────────────────────────────────────
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.sim-undefer');
+  if (!btn) return;
+  e.stopPropagation();
+  _removeAndGo(parseInt(btn.dataset.id));
+});
+
+// ── etapa 1: escolhe onde adiar ────────────────────────────────────────────
+function deferStep1(action) {
+  _deferAct = action;
+
+  // Monta sugestões: todas as contas fora do step atual que não estão
+  // já deferidas/adiantadas
+  const freedAmt = parseFloat(
+    document.getElementById('deferBillAmount').textContent.replace('- R$ ', '').replace(',', '.')
+  );
+
+  const candidates = ALL_BILLS.filter(b =>
+    b.id !== _billId &&
+    b.stepIdx !== _stepIdx &&
+    !DEFER_IDS.has(b.id) &&
+    !ADV_IDS.has(b.id)
+  );
+
+  const container = document.getElementById('advanceSuggestions');
+  container.innerHTML = '';
+
+  if (candidates.length === 0) {
+    container.innerHTML = '<p class="text-muted small text-center py-3">Nenhuma outra conta disponível para adiantar.</p>';
+  } else {
+    // Ordena: similar (±30%) primeiro, depois mais baratas, depois mais caras
+    const similar   = candidates.filter(b => b.amount >= freedAmt * 0.7 && b.amount <= freedAmt * 1.3);
+    const cheaper   = candidates.filter(b => b.amount <  freedAmt * 0.7).sort((a, b) => b.amount - a.amount);
+    const expensive = candidates.filter(b => b.amount >  freedAmt * 1.3).sort((a, b) => a.amount - b.amount);
+    const ordered   = [...similar, ...cheaper, ...expensive];
+
+    ordered.forEach(b => {
+      let tag = '';
+      if (b.amount >= freedAmt * 0.7 && b.amount <= freedAmt * 1.3)
+        tag = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(59,130,246,.15);color:#3b82f6">valor similar</span>';
+      else if (b.amount < freedAmt * 0.7)
+        tag = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(16,185,129,.15);color:#10b981">mais barata</span>';
+      else
+        tag = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(239,68,68,.15);color:#ef4444">mais cara</span>';
+
+      const row = document.createElement('div');
+      row.className = 'd-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-15';
+      row.innerHTML = `
+        <div>
+          <span class="small fw-semibold">${b.name}</span>${tag}
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          <span class="small fw-bold text-white">R$ ${b.amount.toFixed(2).replace('.', ',')}</span>
+          <button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.75rem"
+                  onclick="applyDefer(${b.id})">Adiantar</button>
+        </div>`;
+      container.appendChild(row);
+    });
+  }
+
+  document.getElementById('freedAmountLabel').textContent =
+    'R$ ' + freedAmt.toFixed(2).replace('.', ',');
+
+  document.getElementById('deferPanel1').style.display = 'none';
+  document.getElementById('deferPanel2').style.display = '';
 }
 
-function confirmDefer(action) {
+// ── etapa 2: confirma com ou sem adiantamento ──────────────────────────────
+function applyDefer(advanceId) {
   bootstrap.Modal.getOrCreateInstance(document.getElementById('deferModal')).hide();
+
   const url = new URL(window.location.href);
 
-  if (action === 'next') {
-    const ids = _parseIds(url.searchParams.get('defer'));
-    if (!ids.includes(_deferBillId)) ids.push(_deferBillId);
-    url.searchParams.set('defer', ids.join(','));
-    // Remove do skip se estiver lá
-    _removeFromParam(url, 'skip', _deferBillId);
+  // Aplica defer ou skip
+  if (_deferAct === 'next') {
+    _addToParam(url, 'defer', _billId);
+    _removeFromParam(url, 'skip', _billId);
   } else {
-    const ids = _parseIds(url.searchParams.get('skip'));
-    if (!ids.includes(_deferBillId)) ids.push(_deferBillId);
-    url.searchParams.set('skip', ids.join(','));
-    // Remove do defer se estiver lá
-    _removeFromParam(url, 'defer', _deferBillId);
+    _addToParam(url, 'skip', _billId);
+    _removeFromParam(url, 'defer', _billId);
+  }
+
+  // Aplica adiantamento (se escolheu)
+  if (advanceId) {
+    _addToParam(url, 'advance', advanceId);
+    _removeFromParam(url, 'defer',  advanceId);
+    _removeFromParam(url, 'skip',   advanceId);
   }
 
   window.location.href = url.toString();
 }
 
-function undefer(billId) {
+// ── desfazer um item específico da simulação ───────────────────────────────
+function _removeAndGo(billId) {
   const url = new URL(window.location.href);
-  _removeFromParam(url, 'defer', billId);
-  _removeFromParam(url, 'skip',  billId);
+  _removeFromParam(url, 'defer',   billId);
+  _removeFromParam(url, 'skip',    billId);
+  _removeFromParam(url, 'advance', billId);
   window.location.href = url.toString();
 }
 
+// ── helpers URL ────────────────────────────────────────────────────────────
 function _parseIds(param) {
-  return (param || '').split(',').filter(x => x.trim() !== '').map(Number);
+  return (param || '').split(',').map(Number).filter(x => x > 0);
 }
 
-function _removeFromParam(url, paramName, billId) {
-  const ids = _parseIds(url.searchParams.get(paramName)).filter(x => x !== billId);
-  if (ids.length) url.searchParams.set(paramName, ids.join(','));
-  else url.searchParams.delete(paramName);
+function _addToParam(url, name, id) {
+  const ids = _parseIds(url.searchParams.get(name));
+  if (!ids.includes(id)) ids.push(id);
+  url.searchParams.set(name, ids.join(','));
+}
+
+function _removeFromParam(url, name, id) {
+  const ids = _parseIds(url.searchParams.get(name)).filter(x => x !== id);
+  if (ids.length) url.searchParams.set(name, ids.join(','));
+  else url.searchParams.delete(name);
 }
 </script>
 {% endblock %}
