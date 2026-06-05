@@ -831,6 +831,13 @@ def planner():
     year  = int(request.args.get('year',  now.year))
     uid   = session.get('user_id')
 
+    # Modo simulação: contas adiadas via URL params
+    defer_param    = request.args.get('defer', '')
+    skip_param     = request.args.get('skip',  '')
+    deferred_ids   = set(int(x) for x in defer_param.split(',') if x.isdigit())
+    next_month_ids = set(int(x) for x in skip_param.split(',')  if x.isdigit())
+    is_simulation  = bool(deferred_ids or next_month_ids)
+
     conn = get_db()
     if uid:
         incomes_q = conn.execute("SELECT * FROM incomes WHERE active=1 AND (user_id=? OR user_id=0) ORDER BY day_of_month", (uid,)).fetchall()
@@ -851,7 +858,9 @@ def planner():
     plan = SmartPlanner().generate_plan(month, year,
                                         [dict(i) for i in incomes_q],
                                         [dict(b) for b in bills_q],
-                                        paid_ids=paid_ids, reserve=reserve, savings_goal=goal)
+                                        paid_ids=paid_ids, reserve=reserve, savings_goal=goal,
+                                        deferred_ids=deferred_ids,
+                                        next_month_ids=next_month_ids)
 
     return render_template('planner.html',
         plan=plan, incomes=incomes_q, bills=bills_q,
@@ -860,6 +869,10 @@ def planner():
         month_name=calendar.month_name[month],
         months_list=[(m, calendar.month_name[m]) for m in range(1, 13)],
         reserve=reserve, goal=goal,
+        deferred_ids=deferred_ids,
+        next_month_ids=next_month_ids,
+        is_simulation=is_simulation,
+        total_steps=len(plan['steps']),
     )
 
 

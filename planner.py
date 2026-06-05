@@ -12,12 +12,21 @@ class SmartPlanner:
     - Prioridade: Crítico > Importante > Normal > Opcional
     - Sempre mantém a reserva configurada
     - Contas críticas/importantes são pagas mesmo que fique abaixo da reserva
+
+    Modo simulação:
+    - deferred_ids: contas movidas para a próxima janela pelo usuário
+    - next_month_ids: contas removidas deste mês (deixadas para o próximo)
     """
 
     def generate_plan(self, month, year, incomes, bills,
-                      paid_ids=None, reserve=300, savings_goal=0):
+                      paid_ids=None, reserve=300, savings_goal=0,
+                      deferred_ids=None, next_month_ids=None):
         if paid_ids is None:
             paid_ids = set()
+        if deferred_ids is None:
+            deferred_ids = set()
+        if next_month_ids is None:
+            next_month_ids = set()
 
         if not incomes:
             return self._empty_plan(bills, paid_ids)
@@ -26,10 +35,12 @@ class SmartPlanner:
         bills_sorted   = sorted(bills,   key=lambda x: (x['priority'], x['due_day']))
         last_day       = calendar.monthrange(year, month)[1]
 
+        active_bills = [b for b in bills if b['id'] not in next_month_ids]
         total_income = sum(i['amount'] for i in incomes)
-        total_bills  = sum(b['amount'] for b in bills)
+        total_bills  = sum(b['amount'] for b in active_bills)
         paid_bills   = [b for b in bills if b['id'] in paid_ids]
-        unpaid_bills = [b for b in bills_sorted if b['id'] not in paid_ids]
+        unpaid_bills = [b for b in bills_sorted
+                        if b['id'] not in paid_ids and b['id'] not in next_month_ids]
         total_paid   = sum(b['amount'] for b in paid_bills)
 
         # ---- Criar janelas ----
@@ -40,10 +51,11 @@ class SmartPlanner:
             else:
                 win_end = last_day
             windows.append({
-                'income':     income,
-                'income_day': income['day_of_month'],
-                'win_end':    win_end,
-                'bills':      [],
+                'income':      income,
+                'income_day':  income['day_of_month'],
+                'win_end':     win_end,
+                'bills':       [],
+                'freed_bills': [],  # contas removidas desta janela pelo usuário
             })
 
         first_income_day = incomes_sorted[0]['day_of_month']
@@ -51,26 +63,37 @@ class SmartPlanner:
         unfit_bills  = []
 
         for bill in unpaid_bills:
-            if bill['due_day'] < first_income_day:
-                early_bills.append(bill)
-                continue
+            is_deferred = bill['id'] in deferred_ids
 
-            assigned = False
-            for window in reversed(windows):
-                if window['income_day'] <= bill['due_day']:
-                    window['bills'].append(bill)
-                    assigned = True
-                    break
+            # Encontra janela natural
+            natural_idx = None
+            if bill['due_day'] >= first_income_day:
+                for i, window in enumerate(reversed(windows)):
+                    if window['income_day'] <= bill['due_day']:
+                        natural_idx = len(windows) - 1 - i
+                        break
 
-            if not assigned:
-                unfit_bills.append(bill)
+            if is_deferred:
+                if natural_idx is not None:
+                    windows[natural_idx]['freed_bills'].append(bill)
+                    next_idx = natural_idx + 1
+                else:
+                    next_idx = 0  # conta antecipada adiada vai pra janela 0
+
+                if next_idx < len(windows):
+                    windows[next_idx]['bills'].append(bill)
+                # else: sem próxima janela → tratada como próximo mês (excluída)
+            else:
+                if natural_idx is not None:
+                    windows[natural_idx]['bills'].append(bill)
+                else:
+                    early_bills.append(bill)
 
         # ---- Simular mês ----
         running_balance = 0
         warnings        = []
         steps           = []
 
-        # Alerta contas antecipadas
         if early_bills:
             early_total = sum(b['amount'] for b in early_bills)
             warnings.append({
@@ -86,6 +109,7 @@ class SmartPlanner:
         for window in windows:
             income      = window['income']
             win_bills   = sorted(window['bills'], key=lambda x: (x['priority'], x['due_day']))
+            freed_bills = window['freed_bills']
             balance_in  = running_balance + income['amount']
             running_balance = balance_in
 
@@ -132,17 +156,18 @@ class SmartPlanner:
             urgency_map = self._build_urgency(win_bills, income['day_of_month'])
 
             steps.append({
-                'income':        income,
-                'bills_to_pay':  to_pay,
-                'bills_deferred': to_defer,
-                'bills_total':   sum(b['amount'] for b in to_pay),
-                'balance_before': balance_in,
-                'balance_after':  running_balance,
-                'ok':            not to_defer and running_balance >= 0,
-                'urgency':       urgency_map,
+                'income':          income,
+                'bills_to_pay':    to_pay,
+                'bills_deferred':  to_defer,
+                'bills_total':     sum(b['amount'] for b in to_pay),
+                'balance_before':  balance_in,
+                'balance_after':   running_balance,
+                'ok':              not to_defer and running_balance >= 0,
+                'urgency':         urgency_map,
+                'freed_bills':     freed_bills,
+                'freed_total':     sum(b['amount'] for b in freed_bills),
             })
 
-        # Alerta déficit geral
         if total_income < total_bills:
             diff = total_bills - total_income
             warnings.insert(0, {
@@ -164,23 +189,27 @@ class SmartPlanner:
 
         tip = self._generate_tip(steps, total_income, total_bills, reserve, savings)
 
+        next_month_bills = [b for b in bills
+                            if b['id'] in next_month_ids and b['id'] not in paid_ids]
+
         return {
-            'steps':           steps,
-            'early_bills':     early_bills,
-            'paid_bills':      paid_bills,
-            'warnings':        warnings,
-            'total_income':    total_income,
-            'total_bills':     total_bills,
-            'total_paid':      total_paid,
-            'total_unpaid':    total_bills - total_paid,
-            'savings':         savings,
-            'savings_pct':     (savings / total_income * 100) if total_income > 0 else 0,
-            'projected_left':  running_balance,
-            'has_deficit':     total_income < total_bills,
-            'reserve':         reserve,
-            'savings_goal':    savings_goal,
-            'goal_status':     goal_status,
-            'tip':             tip,
+            'steps':            steps,
+            'early_bills':      early_bills,
+            'paid_bills':       paid_bills,
+            'warnings':         warnings,
+            'total_income':     total_income,
+            'total_bills':      total_bills,
+            'total_paid':       total_paid,
+            'total_unpaid':     total_bills - total_paid,
+            'savings':          savings,
+            'savings_pct':      (savings / total_income * 100) if total_income > 0 else 0,
+            'projected_left':   running_balance,
+            'has_deficit':      total_income < total_bills,
+            'reserve':          reserve,
+            'savings_goal':     savings_goal,
+            'goal_status':      goal_status,
+            'tip':              tip,
+            'next_month_bills': next_month_bills,
         }
 
     def _build_urgency(self, bills, income_day):
@@ -206,8 +235,8 @@ class SmartPlanner:
                 'icon':  'exclamation-triangle',
                 'color': 'danger',
                 'text':  (
-                    f'Suas contas superam sua renda. Considere cortar gastos opcionais '
-                    f'ou negociar valores de contas recorrentes.'
+                    'Suas contas superam sua renda. Considere cortar gastos opcionais '
+                    'ou negociar valores de contas recorrentes.'
                 ),
             }
         elif pct < 10:
@@ -216,7 +245,7 @@ class SmartPlanner:
                 'color': 'warning',
                 'text':  (
                     f'Você economiza {pct:.1f}% da renda. O ideal é pelo menos 20%. '
-                    f'Analise contas opcionais que podem ser reduzidas.'
+                    'Analise contas opcionais que podem ser reduzidas.'
                 ),
             }
         elif pct < 20:
@@ -225,7 +254,7 @@ class SmartPlanner:
                 'color': 'info',
                 'text':  (
                     f'Você economiza {pct:.1f}% da renda — bom! Tente chegar a 20% '
-                    f'para construir uma reserva de emergência mais sólida.'
+                    'para construir uma reserva de emergência mais sólida.'
                 ),
             }
         else:
@@ -234,31 +263,32 @@ class SmartPlanner:
                 'color': 'success',
                 'text':  (
                     f'Ótimo! Você economiza {pct:.1f}% da renda. '
-                    f'Considere investir o excedente para fazer o dinheiro trabalhar por você.'
+                    'Considere investir o excedente para fazer o dinheiro trabalhar por você.'
                 ),
             }
 
     def _empty_plan(self, bills, paid_ids):
         total_bills = sum(b['amount'] for b in bills)
         return {
-            'steps':          [],
-            'early_bills':    [],
-            'paid_bills':     [],
-            'warnings':       [{
+            'steps':            [],
+            'early_bills':      [],
+            'paid_bills':       [],
+            'warnings':         [{
                 'type':    'no_income',
                 'level':   'warning',
                 'message': 'Nenhuma fonte de renda cadastrada. Adicione seu salário em "Rendas".',
             }],
-            'total_income':   0,
-            'total_bills':    total_bills,
-            'total_paid':     0,
-            'total_unpaid':   sum(b['amount'] for b in bills if b['id'] not in paid_ids),
-            'savings':        -total_bills,
-            'savings_pct':    0,
-            'projected_left': 0,
-            'has_deficit':    True,
-            'reserve':        300,
-            'savings_goal':   0,
-            'goal_status':    None,
-            'tip':            None,
+            'total_income':     0,
+            'total_bills':      total_bills,
+            'total_paid':       0,
+            'total_unpaid':     sum(b['amount'] for b in bills if b['id'] not in paid_ids),
+            'savings':          -total_bills,
+            'savings_pct':      0,
+            'projected_left':   0,
+            'has_deficit':      True,
+            'reserve':          300,
+            'savings_goal':     0,
+            'goal_status':      None,
+            'tip':              None,
+            'next_month_bills': [],
         }
