@@ -363,7 +363,37 @@ def _mesma_origem(req):
 
 def _token_confere(req):
     enviado = req.form.get('token') or req.headers.get('X-Token-Atualizacao') or ''
-    return bool(enviado) and secrets.compare_digest(str(enviado), TOKEN_ATUALIZACAO)
+    try:
+        # compare_digest não aceita texto fora do ASCII: isso é recusa, não erro
+        return bool(enviado) and secrets.compare_digest(str(enviado), TOKEN_ATUALIZACAO)
+    except (TypeError, ValueError):
+        return False
+
+
+ARQUIVO_LOG_ATUALIZACAO = os.path.join(DATA_DIR, 'atualizacao.log')
+
+
+def _anotar_atualizacao(msg):
+    """Registro na pasta do programa: é lá que a pessoa consegue achar depois.
+
+    O app roda sem console (o lançador o sobe com a janela escondida), então um
+    print não vai a lugar nenhum. O auxiliar da troca escreve no mesmo arquivo.
+    """
+    try:
+        with open(ARQUIVO_LOG_ATUALIZACAO, 'a', encoding='utf-8') as f:
+            f.write(f'{datetime.now():%d/%m/%Y %H:%M:%S}  {msg}\n')
+    except OSError:
+        pass
+
+
+@app.route('/versao')
+def rota_versao():
+    """Versão que está rodando agora.
+
+    O auxiliar da atualização confere por aqui: responder 200 na porta não
+    prova nada, porque qualquer outro programa pode estar ocupando a porta.
+    """
+    return jsonify(versao=versao.VERSAO)
 
 
 def _disparar_atualizacao(manifesto):
@@ -372,9 +402,12 @@ def _disparar_atualizacao(manifesto):
         try:
             aplicar_atualizacao(manifesto)
         except Exception as e:
-            print(f'  Atualização não aplicada: {e}')
+            _anotar_atualizacao(f'atualizacao para {manifesto.get("versao", "?")} '
+                                f'nao foi aplicada: {e}')
             _liberar_atualizacao()   # a pessoa pode tentar de novo
             return
+        _anotar_atualizacao(f'auxiliar disparado para a versao '
+                            f'{manifesto.get("versao", "?")}; encerrando o programa')
         time.sleep(1.5)   # a resposta já saiu; dá tempo do navegador receber
         os._exit(0)       # o auxiliar está esperando este processo sair
     threading.Thread(target=tarefa, daemon=True).start()

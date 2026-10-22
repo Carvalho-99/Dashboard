@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import tempfile, threading, hashlib, zipfile
+import tempfile, threading, hashlib, zipfile, json, shutil, subprocess, time
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -265,7 +265,7 @@ def retrato(pasta):
 
 _inst = montar_instalacao('instalacao')
 _antes_inst = retrato(_inst)
-_script = atualizador.gerar_script_troca(4321, _inst, extraido)
+_script = atualizador.gerar_script_troca(4321, _inst, extraido, versao_nova='7.7.7')
 _texto = _script.read_text(encoding='utf-8-sig')
 _destrutivas = [l for l in _texto.splitlines()
                 if 'Remove-Item' in l or 'rd /s' in l or 'rmdir' in l]
@@ -292,6 +292,49 @@ check_eq('auxiliar dentro do app e recusado',
          recusa(lambda: atualizador.gerar_script_troca(1, _inst, extraido, raiz_temp=_inst / 'tmp')), True)
 check_eq('pacote dentro do app e recusado',
          recusa(lambda: atualizador.gerar_script_troca(1, _inst, _inst / 'novo')), True)
+# guarda nos dois sentidos: o auxiliar apaga $raizTemp inteira no fim
+check_eq('app dentro do temporario e recusado',
+         recusa(lambda: atualizador.gerar_script_troca(1, _inst, extraido, raiz_temp=_inst.parent)), True)
+check_eq('app dentro do pacote e recusado',
+         recusa(lambda: atualizador.gerar_script_troca(1, _inst, _inst.parent)), True)
+
+# o lançador (ITENS[0]) morre em 2s por desenho; quem precisa responder é o
+# servidor (ITENS[1]). Desistir porque o lançador saiu revertia troca boa.
+check_eq('script acompanha o servidor',
+         '$exeServidor' in _texto and 'ProcessosServidor' in _texto, True)
+check_eq('script nao desiste pelo lancador sair', 'HasExited' in _texto, False)
+check_eq('script usa o esperaResponder',    '$esperaResponder' in _texto, True)
+check_eq('script tem periodo de graca',     '$esperaGraca' in _texto, True)
+_cauda = _texto[_texto.index('nao respondeu; voltando'):]
+check_eq('mata o servidor antes de restaurar',
+         _cauda.index('MatarServidor') < _cauda.index('Restaurar'), True)
+
+# 200 na porta não prova nada: tem que ser a versão esperada
+check_eq('script pergunta a versao',        '/versao' in _texto, True)
+check_eq('script exige a versao nova',      'Responde $versaoNova' in _texto, True)
+check_eq('script exige a versao antiga na volta', 'Responde $versaoAntiga' in _texto, True)
+check_eq('script nao aceita so o 200',      'return ($r.StatusCode -eq 200)' in _texto, False)
+check_eq('script cita a versao nova',       "$versaoNova      = '7.7.7'" in _texto, True)
+check_eq('script cita a versao instalada',
+         f"$versaoAntiga    = '{versao.VERSAO}'" in _texto, True)
+
+# copia tudo como .new ANTES de renomear: a janela sem executável deixa de ser
+# a cópia inteira do _internal e passa a ser duas renomeações
+check_eq('copia para .new',  "(Caminho $item) + '.new'" in _texto, True)
+check_eq('copia antes de renomear',
+         _texto.index('Copy-Item -LiteralPath (Join-Path $pastaNova $item)')
+         < _texto.index('-Destination "$atual.old"'), True)
+check_eq('renomeia o .new para o nome final',
+         'Move-Item -LiteralPath "$atual.new" -Destination $atual' in _texto, True)
+# Remove-Item falha num .exe em uso; renomear funciona
+check_eq('reversao nao apaga o item em uso',
+         'Remove-Item -LiteralPath $atual' in _texto, False)
+check_eq('reversao descarta renomeando',    'function Descartar' in _texto, True)
+# registro onde a pessoa acha
+check_eq('log na pasta do programa',
+         "$log             = Join-Path $pastaApp 'atualizacao.log'" in _texto, True)
+check_eq('log nao fica no temporario',      "Join-Path $raizTemp 'troca.log'" in _texto, False)
+check_eq('temporario sempre apagado',       _texto.count('ApagarTemporario') >= 4, True)
 
 # ── Só a versão instalada instala ────────────────────────────────────────────
 # Rodando do código-fonte, pasta_do_app() é a pasta do projeto: aplicar a troca
@@ -442,6 +485,200 @@ check_eq('auxiliar realmente executou',  _prova.is_file() and 'rodou' in _prova.
 check_eq('disparo sem janela',           bool(atualizador._flags_auxiliar() & 0x08000000), True)
 check_eq('disparo em grupo proprio',     bool(atualizador._flags_auxiliar() & 0x00000200), True)
 check_eq('disparo sem DETACHED_PROCESS', bool(atualizador._flags_auxiliar() & 0x00000008), False)
+check_eq('powershell por caminho absoluto',
+         atualizador._powershell().lower().endswith('system32\\windowspowershell\\v1.0\\powershell.exe'), True)
+check_eq('powershell existe no disco',  Path(atualizador._powershell()).is_file(), True)
+
+# ── O auxiliar rodando de verdade, numa instalação de mentira ────────────────
+# Os greps acima não executam nada. Aqui o .ps1 gerado roda de ponta a ponta
+# contra uma pasta falsa, com um "servidor" nosso numa porta livre (nunca 5050).
+
+class ServidorFalso:
+    """Faz as vezes do app na porta. `versao=None` é o impostor: responde 200
+    na raiz e não sabe dizer a versão, como qualquer outro programa faria.
+
+    `certo_apos=N`: as N primeiras perguntas levam a versão errada. Emula a
+    máquina lenta (antivírus analisando DLL nova) sem depender de relógio.
+    """
+
+    def __init__(self, versao=None, certo_apos=0):
+        self.versao = versao
+        self.certo_apos = certo_apos
+        self.perguntas = 0
+        dono = self
+
+        class Alca(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith('/versao'):
+                    if dono.versao is None:
+                        self.send_response(404)
+                        self.end_headers()
+                        return
+                    dono.perguntas += 1
+                    qual = (dono.versao if dono.perguntas > dono.certo_apos
+                            else '0.0.1')
+                    corpo = json.dumps({'versao': qual}).encode('utf-8')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(corpo)))
+                    self.end_headers()
+                    self.wfile.write(corpo)
+                    return
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'ok')
+
+            def log_message(self, *a):
+                pass
+
+        self.http = HTTPServer(('127.0.0.1', 0), Alca)
+        self.porta = self.http.server_port
+        threading.Thread(target=self.http.serve_forever, daemon=True).start()
+
+    def parar(self):
+        try:
+            self.http.shutdown()
+        except Exception:
+            pass
+
+# lançador de mentira: um exe de verdade que abre e fecha na hora, como o
+# lançador real (que sai em 2s por desenho)
+_EXE_CURTO = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'hostname.exe'
+
+def _lancador(destino, marca):
+    """Copia do hostname.exe com uma marca no fim: roda igual e dá para
+    distinguir a cópia nova da antiga (o carregador PE ignora o rabo)."""
+    destino.write_bytes(_EXE_CURTO.read_bytes() + b'\n@@' + marca)
+
+def montar_fake(nome, marca):
+    """Pasta no formato de uma instalação: 4 itens, o banco e um arquivo da pessoa."""
+    p = _base / nome
+    p.mkdir()
+    _lancador(p / ITENS[0], marca)                    # lançador: abre e sai
+    (p / ITENS[1]).write_bytes(marca + b' servidor')  # servidor (nao roda, so conteudo)
+    (p / '_internal').mkdir()
+    (p / '_internal' / 'base.dll').write_bytes(marca + b' dll')
+    (p / '_internal' / 'sub').mkdir()
+    (p / '_internal' / 'sub' / 'x.pyd').write_bytes(marca + b' pyd')
+    (p / 'LEIA-ME.txt').write_bytes(marca + b' leia-me')
+    (p / 'financas.db').write_bytes(b'meses de lancamentos' * 40)
+    (p / 'meu_backup.zip').write_bytes(b'coisa da pessoa')
+    return p
+
+def montar_pacote_novo(nome, marca):
+    p = _base / nome
+    p.mkdir()
+    _lancador(p / ITENS[0], marca)
+    (p / ITENS[1]).write_bytes(marca + b' servidor')
+    (p / '_internal').mkdir()
+    (p / '_internal' / 'base.dll').write_bytes(marca + b' dll')
+    (p / '_internal' / 'sub').mkdir()
+    (p / '_internal' / 'sub' / 'x.pyd').write_bytes(marca + b' pyd')
+    (p / 'LEIA-ME.txt').write_bytes(marca + b' leia-me')
+    return p
+
+def conteudos(pasta):
+    """Conteúdo de cada um dos 4 itens, para comparar antes e depois."""
+    p = Path(pasta)
+    return {
+        'lancador': (p / ITENS[0]).read_bytes()[-12:],
+        'servidor': (p / ITENS[1]).read_bytes(),
+        'dll':      (p / '_internal' / 'base.dll').read_bytes(),
+        'pyd':      (p / '_internal' / 'sub' / 'x.pyd').read_bytes(),
+        'leiame':   (p / 'LEIA-ME.txt').read_bytes(),
+    }
+
+def esperar(cond, segundos=25):
+    fim = time.time() + segundos
+    while time.time() < fim:
+        if cond():
+            return True
+        time.sleep(0.3)
+    return bool(cond())
+
+def rodar_auxiliar(pasta_app, pasta_nova, raiz, porta, versao_nova, esperas):
+    """Gera o .ps1, dispara e espera ele terminar. Devolve (codigo, texto do log)."""
+    # pid de um processo curto de verdade: a espera pelo encerramento é exercida
+    dorminhoco = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(3)'],
+                                  creationflags=0x08000000)
+    script = atualizador.gerar_script_troca(
+        dorminhoco.pid, pasta_app, pasta_nova, raiz_temp=raiz,
+        versao_nova=versao_nova, porta=porta, esperas=esperas)
+    with finge_empacotado():
+        proc = atualizador._disparar_auxiliar(script)
+    try:
+        proc.wait(timeout=240)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        return 'estourou o tempo', ''
+    dorminhoco.wait(timeout=30)
+    log = Path(pasta_app) / 'atualizacao.log'
+    return proc.returncode, (log.read_text(encoding='utf-8', errors='replace') if log.is_file() else '')
+
+# 1) Caminho de sucesso numa máquina lenta: o lançador abre e sai na hora (como
+# o real, que sai em 2s por desenho) e o servidor só diz a versão nova na quarta
+# pergunta. Se o auxiliar desistisse porque o lançador saiu, esta troca boa
+# seria revertida — foi o defeito C1.
+_app_ok = montar_fake('e2e_ok', b'ANTIGA')
+_novo_ok = montar_pacote_novo('e2e_ok_pacote', b'NOVA')
+_antes_ok = conteudos(_app_ok)
+_sha_db_ok = sha(_app_ok / 'financas.db')
+_raiz_ok = _base / 'e2e_ok_temp'
+_srv_ok = ServidorFalso(versao='9.9.9', certo_apos=3)
+_cod_ok, _log_ok = rodar_auxiliar(_app_ok, _novo_ok, _raiz_ok, _srv_ok.porta, '9.9.9',
+                                  {'fechar': 25, 'responder': 60, 'graca': 40, 'volta': 6})
+_srv_ok.parar()
+check_eq('e2e sucesso: insistiu depois do lancador sair',
+         _srv_ok.perguntas >= 4, True)
+_depois_ok = conteudos(_app_ok)
+
+check_eq('e2e sucesso: codigo 0',          _cod_ok, 0)
+check_eq('e2e sucesso: lancador novo',     _depois_ok['lancador'].endswith(b'@@NOVA'), True)
+check_eq('e2e sucesso: lancador trocou',   _depois_ok['lancador'] != _antes_ok['lancador'], True)
+check_eq('e2e sucesso: servidor novo',     _depois_ok['servidor'], b'NOVA servidor')
+check_eq('e2e sucesso: dll nova',          _depois_ok['dll'], b'NOVA dll')
+check_eq('e2e sucesso: subpasta nova',     _depois_ok['pyd'], b'NOVA pyd')
+check_eq('e2e sucesso: leia-me novo',      _depois_ok['leiame'], b'NOVA leia-me')
+check_eq('e2e sucesso: nao sobrou .old',   list(_app_ok.glob('*.old')), [])
+check_eq('e2e sucesso: nao sobrou .new',   list(_app_ok.glob('*.new')), [])
+check_eq('e2e sucesso: banco intacto',     sha(_app_ok / 'financas.db'), _sha_db_ok)
+check_eq('e2e sucesso: arquivo da pessoa intacto',
+         (_app_ok / 'meu_backup.zip').read_bytes(), b'coisa da pessoa')
+check_eq('e2e sucesso: esperou a versao certa',
+         'versao 9.9.9 respondeu' in _log_ok, True)
+check_eq('e2e sucesso: log na pasta do programa',
+         (_app_ok / 'atualizacao.log').is_file(), True)
+check_eq('e2e sucesso: temporario apagado',
+         esperar(lambda: not _raiz_ok.exists()), True)
+
+# 2) Caminho de reversão com um IMPOSTOR na porta: responde 200 na raiz e não
+# sabe dizer a versão (outra cópia instalada, servidor velho, qualquer coisa).
+# Antes isso valia como "deu certo" e os .old eram apagados.
+_app_rb = montar_fake('e2e_rb', b'ANTIGA')
+_novo_rb = montar_pacote_novo('e2e_rb_pacote', b'NOVA')
+_antes_rb = conteudos(_app_rb)
+_sha_db_rb = sha(_app_rb / 'financas.db')
+_raiz_rb = _base / 'e2e_rb_temp'
+_srv_rb = ServidorFalso(versao=None)             # impostor
+_cod_rb, _log_rb = rodar_auxiliar(_app_rb, _novo_rb, _raiz_rb, _srv_rb.porta, '9.9.9',
+                                  {'fechar': 25, 'responder': 14, 'graca': 5, 'volta': 5})
+_srv_rb.parar()
+_depois_rb = conteudos(_app_rb)
+
+check_eq('e2e reversao: codigo 1',           _cod_rb, 1)
+check_eq('e2e reversao: impostor nao conta',
+         'nao respondeu' in _log_rb and 'respondeu; apagando' not in _log_rb, True)
+check_eq('e2e reversao: conteudo antigo de volta', _depois_rb, _antes_rb)
+check_eq('e2e reversao: nao sobrou .old',    list(_app_rb.glob('*.old')), [])
+check_eq('e2e reversao: nao sobrou .new',    list(_app_rb.glob('*.new')), [])
+check_eq('e2e reversao: banco intacto',      sha(_app_rb / 'financas.db'), _sha_db_rb)
+check_eq('e2e reversao: arquivo da pessoa intacto',
+         (_app_rb / 'meu_backup.zip').read_bytes(), b'coisa da pessoa')
+check_eq('e2e reversao: lancador antigo de volta',
+         _depois_rb['lancador'].endswith(b'@@ANTIGA'), True)
+check_eq('e2e reversao: log conta a reversao', 'reversao concluida' in _log_rb, True)
+check_eq('e2e reversao: temporario apagado',
+         esperar(lambda: not _raiz_rb.exists()), True)
 
 _srv.shutdown()
 
@@ -475,6 +712,9 @@ check_eq('origem estranha recusada',    postar(origem='http://site.mau').status_
 check_eq('referer estranho recusado',   postar(origem=None, referer='http://site.mau/x').status_code, 403)
 check_eq('sem origem nem referer recusado', postar(origem=None).status_code, 403)
 check_eq('origem sem http recusada',    postar(origem='file:///c:/x').status_code, 403)
+# compare_digest levanta TypeError fora do ASCII: é recusa, não erro 500
+check_eq('token com acento recusado',   postar(token='café' + 'x' * 40).status_code, 403)
+check_eq('token com emoji recusado',    postar(token='x' * 40 + '\U0001f600').status_code, 403)
 check_eq('nada disparado nas recusas',  _disparos, [])
 
 # rodando do código-fonte (como esta suite): passa o portão e a rota recusa
@@ -546,6 +786,26 @@ check_eq('fonte explica o motivo',
 
 flask_app._atualizacao = None
 check_eq('sem faixa a senha nao aparece', TOKEN.encode() in c.get('/').data, False)
+# ── /versao: é por aqui que o auxiliar sabe quem está atendendo na porta ─────
+_r_versao = c.get('/versao')
+check_eq('rota /versao responde 200',   _r_versao.status_code, 200)
+check_eq('rota /versao diz a versao',   (_r_versao.get_json() or {}).get('versao'), versao.VERSAO)
+check_eq('rota /versao e json',         'json' in (_r_versao.headers.get('Content-Type') or ''), True)
+
+# ── Página de espera: sincera sobre o que fazer se nada acontecer ────────────
+flask_app._atualizacao = {'versao': '9.9.9', 'url': 'x', 'sha256': 'y'}
+sys.frozen = True
+_pag = postar()
+del sys.frozen
+flask_app._liberar_atualizacao()
+flask_app._atualizacao = None
+check_eq('pagina de espera cita o log',   b'atualizacao.log' in _pag.data, True)
+check_eq('pagina de espera diz o prazo',  'cinco minutos'.encode() in _pag.data, True)
+check_eq('pagina de espera diz o que fazer',
+         'atalho de sempre'.encode() in _pag.data, True)
+check_eq('log do app fica na pasta de dados',
+         Path(flask_app.ARQUIVO_LOG_ATUALIZACAO).name, 'atualizacao.log')
+
 _js = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'script.js'), encoding='utf-8').read()
 check_eq('auto-dismiss exclui faixa', ".alert.fade.show:not(.alerta-atualizacao)" in _js, True)
 

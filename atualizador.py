@@ -186,6 +186,8 @@ def extrair_pacote(zip_path, destino):
 PORTA = 5050                 # onde o app atende; o auxiliar confirma a troca aqui
 ESPERA_FECHAR = 60           # segundos esperando o app encerrar
 ESPERA_RESPONDER = 90        # segundos esperando a versão nova atender na porta
+ESPERA_GRACA = 25            # antes disso, não desiste nem sem servidor no ar
+ESPERA_VOLTA = 30            # segundos esperando a versão anterior voltar
 
 
 def empacotado():
@@ -246,6 +248,7 @@ function ExeDoApp {
 }
 
 function Abrir {
+  # abre pelo lancador: e ele que sobe o servidor e abre o navegador
   $e = ExeDoApp
   if (Test-Path -LiteralPath $e) {
     try { return (Start-Process -FilePath $e -WorkingDirectory $pastaApp -PassThru) }
@@ -256,11 +259,42 @@ function Abrir {
   return $null
 }
 
-function Responde {
+function ProcessosServidor {
+  # o lancador morre em 2s por desenho; quem importa e o servidor, e so o
+  # servidor DESTA pasta (outra instalacao do mesmo programa nao conta)
+  $alvo = Caminho $exeServidor
+  $nome = [IO.Path]::GetFileNameWithoutExtension($exeServidor)
+  $achados = @()
+  foreach ($p in @(Get-Process -Name $nome -ErrorAction SilentlyContinue)) {
+    try { if ($p.Path -eq $alvo) { $achados += $p } } catch { }
+  }
+  return $achados
+}
+
+function MatarServidor {
+  foreach ($p in (ProcessosServidor)) {
+    try { Stop-Process -Id $p.Id -Force; Anotar ("servidor encerrado (pid " + $p.Id + ")") }
+    catch { Anotar "nao deu para encerrar o servidor: $_" }
+  }
+}
+
+function Responde($esperada) {
+  # 200 na porta nao basta: qualquer outro programa pode estar ali. So conta
+  # se quem responde disser que e a versao esperada.
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 -Uri ("http://127.0.0.1:{0}/" -f $porta)
-    return ($r.StatusCode -eq 200)
+    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 -Uri ("http://127.0.0.1:{0}/versao" -f $porta)
+    if ($r.StatusCode -ne 200) { return $false }
+    $v = (ConvertFrom-Json $r.Content).versao
+    return ([string]$v -eq [string]$esperada)
   } catch { return $false }
+}
+
+function Descartar($caminho) {
+  # Remove-Item falha num .exe em uso; renomear funciona no mesmo volume
+  if (-not (Test-Path -LiteralPath $caminho)) { return }
+  $slot = "$caminho.new"
+  if (Test-Path -LiteralPath $slot) { Remove-Item -LiteralPath $slot -Recurse -Force }
+  Move-Item -LiteralPath $caminho -Destination $slot -Force
 }
 
 function Restaurar {
@@ -270,19 +304,29 @@ function Restaurar {
     $velho = "$atual.old"
     try {
       if (Test-Path -LiteralPath $velho) {
-        if (Test-Path -LiteralPath $atual) { Remove-Item -LiteralPath $atual -Recurse -Force }
+        Descartar $atual
         Move-Item -LiteralPath $velho -Destination $atual -Force
         Anotar "devolvido: $item"
       }
     } catch { Anotar "falha ao devolver $item : $_" }
   }
+  LimparNovos
+}
+
+function LimparNovos {
+  foreach ($item in $itens) {
+    $lixo = (Caminho $item) + '.new'
+    try { if (Test-Path -LiteralPath $lixo) { Remove-Item -LiteralPath $lixo -Recurse -Force } }
+    catch { Anotar "sobrou $item.new : $_" }
+  }
 }
 
 function ApagarTemporario {
-  # nao da para apagar a pasta de dentro dela: deixa um cmd solto fazendo isso
+  # nao da para apagar a pasta de dentro dela: deixa um cmd solto fazendo isso.
+  # O registro fica na pasta do programa, fora daqui, e sempre sobrevive.
   try {
     Start-Process -FilePath 'cmd.exe' -WindowStyle Hidden -WorkingDirectory $env:TEMP `
-      -ArgumentList '/c', ('ping -n 5 127.0.0.1 >nul & rd /s /q "' + $raizTemp + '"')
+      -ArgumentList '/c', ('ping -n 3 127.0.0.1 >nul & rd /s /q "' + $raizTemp + '"')
   } catch { }
 }
 
@@ -298,6 +342,10 @@ if (Get-Process -Id $pidApp -ErrorAction SilentlyContinue) {
   exit 1
 }
 Start-Sleep -Milliseconds 800
+
+# nosso processo saiu, mas pode ter sobrado outro servidor desta mesma pasta
+# (a pessoa abriu o programa duas vezes): ele travaria os arquivos
+MatarServidor
 
 # sobra de uma tentativa anterior: se o item esta no lugar, a sobra e lixo;
 # se o item faltou, a sobra e a unica copia e volta para o lugar
@@ -316,22 +364,32 @@ foreach ($item in $itens) {
     } catch { Anotar "nao deu para tratar a sobra de $item : $_" }
   }
 }
+LimparNovos
 
 try {
   foreach ($item in $itens) {
     if (-not (Test-Path -LiteralPath (Join-Path $pastaNova $item))) { throw "falta no pacote novo: $item" }
   }
-  # move de lado (nao apaga): e isso que permite voltar atras
+  # 1) copia tudo como <item>.new ANTES de mexer nos nomes de verdade: a copia
+  # do _internal sao centenas de arquivos e e a parte demorada. Enquanto ela
+  # acontece, a instalacao continua inteira e funcionando.
+  foreach ($item in $itens) {
+    $novoNome = (Caminho $item) + '.new'
+    if (Test-Path -LiteralPath $novoNome) { Remove-Item -LiteralPath $novoNome -Recurse -Force }
+    Copy-Item -LiteralPath (Join-Path $pastaNova $item) -Destination $novoNome -Recurse -Force
+  }
+  Anotar 'copias novas prontas ao lado'
+  # 2) agora so renomeacoes, item por item: a janela sem executavel e de
+  # duas operacoes de metadado, nao de uma copia inteira
   foreach ($item in $itens) {
     $atual = Caminho $item
     if (Test-Path -LiteralPath $atual) { Move-Item -LiteralPath $atual -Destination "$atual.old" -Force }
-  }
-  foreach ($item in $itens) {
-    Copy-Item -LiteralPath (Join-Path $pastaNova $item) -Destination (Caminho $item) -Recurse -Force
+    Move-Item -LiteralPath "$atual.new" -Destination $atual -Force
   }
   Anotar 'arquivos novos no lugar'
 } catch {
   Anotar "falha na troca: $_"
+  MatarServidor
   Restaurar
   Abrir | Out-Null
   exit 1
@@ -340,59 +398,71 @@ try {
 $novo = Abrir
 $ok = $false
 $limite = (Get-Date).AddSeconds($esperaResponder)
-while (($novo -ne $null) -and ((Get-Date) -lt $limite)) {
-  if (Responde) { $ok = $true; break }
-  if ($novo.HasExited) {
-    # caiu sozinho: uma ultima chance de responder, senao volta atras ja
-    Start-Sleep -Seconds 2
-    if (Responde) { $ok = $true }
-    Anotar 'a versao nova encerrou sozinha'
+$graca = (Get-Date).AddSeconds($esperaGraca)
+while ((Get-Date) -lt $limite) {
+  if (Responde $versaoNova) { $ok = $true; break }
+  # nao desiste pelo lancador ter saido (ele sai em 2s por desenho). So
+  # desiste cedo se, passada a graca, nao houver servidor nenhum rodando.
+  if (((Get-Date) -gt $graca) -and ((ProcessosServidor).Count -eq 0)) {
+    Anotar 'nenhum servidor rodando desta pasta; nao vai responder'
     break
   }
   Start-Sleep -Seconds 2
 }
 
 if ($ok) {
-  Anotar 'versao nova respondeu; apagando a anterior'
+  Anotar "versao $versaoNova respondeu; apagando a anterior"
   foreach ($item in $itens) {
     $velho = (Caminho $item) + '.old'
     try {
       if (Test-Path -LiteralPath $velho) { Remove-Item -LiteralPath $velho -Recurse -Force }
     } catch { Anotar "sobrou $item.old : $_" }
   }
+  LimparNovos
   ApagarTemporario
   exit 0
 }
 
-Anotar 'versao nova nao respondeu; voltando para a anterior'
-if ($novo -ne $null) {
-  try { if (-not $novo.HasExited) { Stop-Process -Id $novo.Id -Force } } catch { }
-}
+Anotar "a versao $versaoNova nao respondeu; voltando para a anterior"
+# mata o SERVIDOR (o lancador ja morreu sozinho): e ele que trava os arquivos
+MatarServidor
 Start-Sleep -Milliseconds 1500
 Restaurar
 Abrir | Out-Null
 # ficar sem programa nenhum e o pior desfecho possivel: confere e insiste
 $voltou = $false
-$limite = (Get-Date).AddSeconds(30)
+$limite = (Get-Date).AddSeconds($esperaVolta)
 while ((Get-Date) -lt $limite) {
-  if (Responde) { $voltou = $true; break }
+  if (Responde $versaoAntiga) { $voltou = $true; break }
   Start-Sleep -Seconds 2
 }
 if (-not $voltou) {
-  Anotar 'a anterior tambem nao respondeu; abrindo mais uma vez'
+  Anotar 'a anterior nao confirmou a versao; abrindo mais uma vez'
   Start-Sleep -Seconds 2
   Abrir | Out-Null
 }
-Anotar ('versao anterior de volta (respondeu: ' + $voltou + ')')
+Anotar ('reversao concluida (versao ' + $versaoAntiga + ' confirmada: ' + $voltou + ')')
+ApagarTemporario
 exit 1
 '''
 
 
-def gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=None):
+def _mesma_arvore(a, b):
+    """True se a e b são a mesma pasta, ou uma está dentro da outra."""
+    return a == b or a in b.parents or b in a.parents
+
+
+def gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=None,
+                       versao_nova=None, porta=None, esperas=None):
     """Escreve o .ps1 que troca os arquivos e devolve o caminho dele.
 
     O auxiliar mora numa pasta temporária: a pasta do programa é justamente o
     que vai ser reescrito, e o auxiliar não pode ser um dos arquivos trocados.
+
+    `versao_nova` é o que o auxiliar vai exigir de quem responder na porta: 200
+    não basta, porque qualquer programa pode estar ocupando a porta.
+    `porta` e `esperas` existem para o teste poder rodar o script de verdade
+    numa porta livre e com tempos curtos.
     """
     pasta_app = Path(pasta_app).resolve()
     pasta_nova = Path(pasta_nova).resolve()
@@ -400,10 +470,15 @@ def gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=None):
         raiz_temp = Path(tempfile.mkdtemp(prefix='orgfin_troca_'))
     raiz_temp = Path(raiz_temp).resolve()
     raiz_temp.mkdir(parents=True, exist_ok=True)
-    if raiz_temp == pasta_app or pasta_app in raiz_temp.parents:
-        raise ValueError('o auxiliar não pode ficar dentro da pasta do programa')
-    if pasta_nova == pasta_app or pasta_app in pasta_nova.parents:
-        raise ValueError('o pacote novo não pode estar dentro da pasta do programa')
+    # guarda nos dois sentidos: o auxiliar apaga $raizTemp inteira no fim, e
+    # essa é a única linha do script que poderia alcançar o financas.db
+    if _mesma_arvore(raiz_temp, pasta_app):
+        raise ValueError('o auxiliar não pode ficar na mesma árvore da pasta do programa')
+    if _mesma_arvore(pasta_nova, pasta_app):
+        raise ValueError('o pacote novo não pode ficar na mesma árvore da pasta do programa')
+    tempos = dict(fechar=ESPERA_FECHAR, responder=ESPERA_RESPONDER,
+                  graca=ESPERA_GRACA, volta=ESPERA_VOLTA)
+    tempos.update(esperas or {})
     itens = ', '.join("'" + _ps(i) + "'" for i in versao.ITENS_DO_PROGRAMA)
     script = raiz_temp / 'trocar_arquivos.ps1'
     if script.name in versao.ITENS_DO_PROGRAMA:
@@ -418,11 +493,18 @@ def gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=None):
         f"$raizTemp        = '{_ps(raiz_temp)}'\n"
         f"$exeApp          = '{_ps(versao.ITENS_DO_PROGRAMA[0])}'\n"
         f"$exeAlternativo  = '{_ps(versao.ITENS_DO_PROGRAMA[1])}'\n"
-        f'$porta           = {int(PORTA)}\n'
-        f'$esperaFechar    = {int(ESPERA_FECHAR)}\n'
-        f'$esperaResponder = {int(ESPERA_RESPONDER)}\n'
+        f"$exeServidor     = '{_ps(versao.ITENS_DO_PROGRAMA[1])}'\n"
+        f"$versaoNova      = '{_ps(versao_nova or '')}'\n"
+        f"$versaoAntiga    = '{_ps(versao.VERSAO)}'\n"
+        f'$porta           = {int(porta or PORTA)}\n'
+        f'$esperaFechar    = {int(tempos["fechar"])}\n'
+        f'$esperaResponder = {int(tempos["responder"])}\n'
+        f'$esperaGraca     = {int(tempos["graca"])}\n'
+        f'$esperaVolta     = {int(tempos["volta"])}\n'
         f'$itens           = @({itens})\n'
-        "$log             = Join-Path $raizTemp 'troca.log'\n"
+        # o registro fica na pasta do programa, não no temporário: é lá que a
+        # pessoa (ou o suporte) consegue encontrar quando algo der errado
+        "$log             = Join-Path $pastaApp 'atualizacao.log'\n"
     )
     # BOM: sem ele o PowerShell 5.1 lê o arquivo como ANSI e erra os acentos
     script.write_text(cabecalho + CORPO_TROCA, encoding='utf-8-sig')
@@ -445,6 +527,17 @@ RECUSA_FONTE = ('a atualização automática só funciona na versão instalada d
                 'programa, não quando ele roda a partir do código-fonte')
 
 
+def _powershell():
+    """Caminho absoluto do powershell.exe.
+
+    CreateProcess procura no diretório atual antes do PATH, e o auxiliar sobe
+    com cwd no temporário: um 'powershell.exe' plantado ali seria executado.
+    """
+    raiz = os.environ.get('SystemRoot') or 'C:' + os.sep + 'Windows'
+    caminho = os.path.join(raiz, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    return caminho if os.path.isfile(caminho) else 'powershell.exe'
+
+
 def _disparar_auxiliar(script):
     """Sobe o auxiliar solto do app: ele precisa sobreviver ao encerramento.
 
@@ -453,7 +546,7 @@ def _disparar_auxiliar(script):
     if not empacotado():
         raise ValueError(RECUSA_FONTE)
     return subprocess.Popen(
-        ['powershell.exe', '-NoProfile', '-NonInteractive',
+        [_powershell(), '-NoProfile', '-NonInteractive',
          '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
          '-File', str(script)],
         cwd=tempfile.gettempdir(),     # nunca a pasta do app nem a temporária
@@ -490,7 +583,8 @@ def aplicar_atualizacao(manifesto, pasta_app=None, pid=None, raiz_temp=None):
             raise ValueError('pacote baixado não confere com o hash publicado')
         pasta_nova = extrair_pacote(pacote, temp / 'novo')
         copiar_banco(pasta_app, versao.VERSAO)
-        script = gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=temp)
+        script = gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=temp,
+                                    versao_nova=manifesto.get('versao', ''))
         _disparar_auxiliar(script)
     except BaseException:
         shutil.rmtree(temp, ignore_errors=True)
