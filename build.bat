@@ -52,7 +52,12 @@ if exist "build_temp" rmdir /s /q "build_temp"
 if exist "icone.ico" del "icone.ico"
 
 :: Copia LEIA-ME
-copy /Y "comprador_leiame.txt" "comprador\OrganizadorFinanceiro\LEIA-ME.txt" >nul 2>&1
+if not exist "comprador_leiame.txt" (
+    echo ERRO: comprador_leiame.txt nao encontrado - o LEIA-ME nao foi incluido no pacote.
+    pause
+    exit /b 1
+)
+copy /Y "comprador_leiame.txt" "comprador\OrganizadorFinanceiro\LEIA-ME.txt" >nul
 
 :: Remove Iniciar.bat antigo (substituido pelo exe com icone)
 if exist "comprador\OrganizadorFinanceiro\Iniciar.bat" del "comprador\OrganizadorFinanceiro\Iniciar.bat"

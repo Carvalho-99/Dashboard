@@ -85,14 +85,14 @@
   <div class="col-6 col-lg-3">
     <div class="stat-card">
       <div class="stat-icon text-success"><i class="bi bi-arrow-down-circle"></i></div>
-      <div class="stat-value text-success">R$ {{ "%.2f"|format(total_income)|replace('.', ',') }}</div>
+      <div class="stat-value text-success">R$ {{ total_income|brl }}</div>
       <div class="stat-label">Renda total</div>
     </div>
   </div>
   <div class="col-6 col-lg-3">
     <div class="stat-card">
       <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle"></i></div>
-      <div class="stat-value text-danger">R$ {{ "%.2f"|format(total_bills)|replace('.', ',') }}</div>
+      <div class="stat-value text-danger">R$ {{ total_bills|brl }}</div>
       <div class="stat-label">Total de contas</div>
     </div>
   </div>
@@ -102,7 +102,7 @@
         <i class="bi bi-piggy-bank"></i>
       </div>
       <div class="stat-value {% if plan.savings >= 0 %}text-info{% else %}text-danger{% endif %}">
-        R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
+        R$ {{ plan.savings|brl }}
       </div>
       <div class="stat-label">Sobra juntos</div>
     </div>
@@ -110,7 +110,7 @@
   <div class="col-6 col-lg-3">
     <div class="stat-card">
       <div class="stat-icon text-pink"><i class="bi bi-heart-fill"></i></div>
-      <div class="stat-value" style="color:var(--pink)">R$ {{ "%.2f"|format(shared_total)|replace('.', ',') }}</div>
+      <div class="stat-value" style="color:var(--pink)">R$ {{ shared_total|brl }}</div>
       <div class="stat-label">Contas do casal</div>
     </div>
   </div>
@@ -139,17 +139,17 @@
       <div class="row g-2 mb-2">
         <div class="col-4 text-center">
           <div class="small text-muted">Renda</div>
-          <div class="fw-bold text-success">R$ {{ "%.2f"|format(stats.get('income', 0)) }}</div>
+          <div class="fw-bold text-success">R$ {{ stats.get('income', 0)|brl }}</div>
         </div>
         <div class="col-4 text-center">
           <div class="small text-muted">Contas</div>
-          <div class="fw-bold text-danger">R$ {{ "%.2f"|format(stats.get('bills', 0)) }}</div>
+          <div class="fw-bold text-danger">R$ {{ stats.get('bills', 0)|brl }}</div>
         </div>
         <div class="col-4 text-center">
           <div class="small text-muted">Sobra</div>
           {% set sav = stats.get('savings', 0) %}
           <div class="fw-bold {% if sav >= 0 %}text-success{% else %}text-danger{% endif %}">
-            R$ {{ "%.2f"|format(sav) }}
+            R$ {{ sav|brl }}
           </div>
         </div>
       </div>
@@ -186,7 +186,7 @@
             {% endif %}
           </div>
           <div class="d-flex align-items-center gap-1">
-            <span class="small fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+            <span class="small fw-bold">R$ {{ b['amount']|brl }}</span>
             {% if b['id'] not in paid_ids %}
             <button class="check-btn check-empty" style="width:22px;height:22px;font-size:0.65rem"
                     data-bs-toggle="modal" data-bs-target="#cpay{{ b['id'] }}">
@@ -268,7 +268,7 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold">R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}</span>
+          <span class="fw-bold">R$ {{ b['amount']|brl }}</span>
           <a href="/bills/edit/{{ b['id'] }}" class="btn-icon"><i class="bi bi-pencil"></i></a>
         </div>
       </div>
@@ -277,7 +277,7 @@
 
     <div class="d-flex justify-content-end pt-1">
       <small class="text-muted me-2">Total compartilhado:</small>
-      <span class="fw-bold" style="color:var(--pink)">R$ {{ "%.2f"|format(shared_total) }}</span>
+      <span class="fw-bold" style="color:var(--pink)">R$ {{ shared_total|brl }}</span>
     </div>
 
   {% else %}
@@ -312,7 +312,7 @@
           {% endif %}
           <span>{{ b['name'] }}</span>
         </div>
-        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+        <span class="text-danger fw-bold">R$ {{ b['amount']|brl }}</span>
       </div>
       {% endfor %}
     </div>
@@ -336,7 +336,7 @@
           {% endif %}
           <span>{{ b['name'] }}</span>
         </div>
-        <span class="text-warning fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+        <span class="text-warning fw-bold">R$ {{ b['amount']|brl }}</span>
       </div>
       {% endfor %}
     </div>
@@ -364,16 +364,16 @@
   <div class="row g-2">
     <div class="col-4 text-center">
       <div class="small text-muted">Renda</div>
-      <div class="fw-bold text-success">R$ {{ "%.2f"|format(plan.total_income) }}</div>
+      <div class="fw-bold text-success">R$ {{ plan.total_income|brl }}</div>
     </div>
     <div class="col-4 text-center">
       <div class="small text-muted">Contas</div>
-      <div class="fw-bold text-danger">R$ {{ "%.2f"|format(plan.total_bills) }}</div>
+      <div class="fw-bold text-danger">R$ {{ plan.total_bills|brl }}</div>
     </div>
     <div class="col-4 text-center">
       <div class="small text-muted">Sobra</div>
       <div class="fw-bold {% if plan.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
-        R$ {{ "%.2f"|format(plan.savings) }}
+        R$ {{ plan.savings|brl }}
       </div>
     </div>
   </div>

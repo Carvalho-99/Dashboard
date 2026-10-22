@@ -74,7 +74,7 @@
           <div class="col-7">
             <label class="form-label fw-semibold">Valor (R$) *</label>
             <input type="text" name="amount" class="form-control"
-                   value="{{ '%.2f'|format(income['amount'])|replace('.',',') if income else '' }}"
+                   value="{{ income['amount']|brl if income else '' }}"
                    placeholder="0,00" required>
           </div>
           <div class="col-5">

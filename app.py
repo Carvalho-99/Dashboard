@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 import sqlite3
 from datetime import datetime, date
-import calendar
 import socket
 import os
 import json
@@ -50,6 +49,42 @@ INCOME_TYPES = {
 }
 
 USER_COLORS = ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f97316', '#ef4444']
+
+MESES_PT = [
+    '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+
+def format_brl(value):
+    """Formata um valor no padrão brasileiro: 4500 -> 4.500,00"""
+    try:
+        value = float(value or 0)
+    except (TypeError, ValueError):
+        value = 0.0
+    # f-string gera 4,500.00 (padrão en-US): vira 4.500,00
+    inteiro, _, centavos = f'{value:,.2f}'.partition('.')
+    return inteiro.replace(',', '.') + ',' + centavos
+
+
+
+
+def parse_brl(texto, padrao=0.0):
+    """Lê um valor digitado em pt-BR: '4.500,00', '4500,00' ou '4500'."""
+    if texto is None:
+        return padrao
+    limpo = str(texto).strip().replace('R$', '').replace(' ', '')
+    if not limpo:
+        return padrao
+    if ',' in limpo:
+        # vírgula é o decimal: os pontos são separadores de milhar
+        limpo = limpo.replace('.', '').replace(',', '.')
+    try:
+        return float(limpo)
+    except ValueError:
+        return padrao
+
+app.jinja_env.filters['brl'] = format_brl
 
 
 # ==================== DB ====================
@@ -432,7 +467,7 @@ def dashboard():
         paid_count=len(paid_ids & bill_ids),
         bill_pay_counts=bill_pay_counts,
         month=month, year=year, today=today,
-        month_name=calendar.month_name[month],
+        month_name=MESES_PT[month],
     )
 
 
@@ -471,7 +506,7 @@ def bills():
         bills=bills_q, paid_ids=paid_ids, payment_map=payment_map,
         incomes=incomes, bill_pay_counts=bill_pay_counts,
         month=month, year=year, today=today,
-        month_name=calendar.month_name[month],
+        month_name=MESES_PT[month],
     )
 
 
@@ -479,7 +514,7 @@ def bills():
 def add_bill():
     if request.method == 'POST':
         name         = request.form['name'].strip()
-        amount       = float(request.form['amount'].replace(',', '.'))
+        amount       = parse_brl(request.form['amount'])
         due_day      = int(request.form['due_day'])
         category     = request.form['category']
         priority     = int(request.form['priority'])
@@ -524,7 +559,7 @@ def edit_bill(bill_id):
 
     if request.method == 'POST':
         name         = request.form['name'].strip()
-        amount       = float(request.form['amount'].replace(',', '.'))
+        amount       = parse_brl(request.form['amount'])
         due_day      = int(request.form['due_day'])
         category     = request.form['category']
         priority     = int(request.form['priority'])
@@ -595,7 +630,7 @@ def incomes():
 def add_income():
     if request.method == 'POST':
         name         = request.form['name'].strip()
-        amount       = float(request.form['amount'].replace(',', '.'))
+        amount       = parse_brl(request.form['amount'])
         day_of_month = int(request.form['day_of_month'])
         itype        = request.form['type']
         notes        = request.form.get('notes', '').strip()
@@ -630,7 +665,7 @@ def edit_income(income_id):
 
     if request.method == 'POST':
         name         = request.form['name'].strip()
-        amount       = float(request.form['amount'].replace(',', '.'))
+        amount       = parse_brl(request.form['amount'])
         day_of_month = int(request.form['day_of_month'])
         itype        = request.form['type']
         notes        = request.form.get('notes', '').strip()
@@ -671,7 +706,7 @@ def mark_paid():
     bill_id       = int(request.form['bill_id'])
     month         = int(request.form['month'])
     year          = int(request.form['year'])
-    amount_paid   = request.form.get('amount_paid', '').replace(',', '.').strip()
+    amount_paid   = request.form.get('amount_paid', '').strip()
     income_source = request.form.get('income_source', '')
     paid_date     = request.form.get('paid_date', date.today().isoformat())
     notes         = request.form.get('notes', '')
@@ -685,7 +720,7 @@ def mark_paid():
     ).fetchone()
 
     if bill and not existing:
-        final_amount = float(amount_paid) if amount_paid else bill['amount']
+        final_amount = parse_brl(amount_paid) if amount_paid else bill['amount']
         conn.execute(
             "INSERT INTO payments(bill_id,bill_name,amount_paid,paid_date,month,year,income_source,notes) "
             "VALUES(?,?,?,?,?,?,?,?)",
@@ -801,7 +836,7 @@ def pay_advance():
     count = 0
     for m_str, y_str, a_str in zip(months, years, amounts):
         m, y = int(m_str), int(y_str)
-        a = float(a_str.replace(',', '.')) if a_str.strip() else bill['amount']
+        a = parse_brl(a_str) if a_str.strip() else bill['amount']
         existing = conn.execute(
             "SELECT id FROM payments WHERE bill_id=? AND month=? AND year=?",
             (bill_id, m, y)
@@ -853,7 +888,7 @@ def planner():
 
     bills_q  = filter_by_end_date(bills_q)
     paid_ids = {p['bill_id'] for p in payments}
-    reserve  = float(get_setting('reserve_amount', '300'))
+    reserve  = parse_brl(get_setting('reserve_amount', '300'), 300.0)
     goal     = float(get_setting('savings_goal', '0'))
 
     from planner import SmartPlanner
@@ -869,8 +904,8 @@ def planner():
         plan=plan, incomes=incomes_q, bills=bills_q,
         paid_ids=paid_ids,
         month=month, year=year,
-        month_name=calendar.month_name[month],
-        months_list=[(m, calendar.month_name[m]) for m in range(1, 13)],
+        month_name=MESES_PT[month],
+        months_list=[(m, MESES_PT[m]) for m in range(1, 13)],
         reserve=reserve, goal=goal,
         deferred_ids=deferred_ids,
         next_month_ids=next_month_ids,
@@ -898,8 +933,8 @@ def couple():
     if not cid:
         return render_template('couple.html',
             mode='picker', couples=couples,
-            month=month, year=year, month_name=calendar.month_name[month],
-            months_list=[(m, calendar.month_name[m]) for m in range(1, 13)],
+            month=month, year=year, month_name=MESES_PT[month],
+            months_list=[(m, MESES_PT[m]) for m in range(1, 13)],
         )
 
     # Find selected couple
@@ -982,7 +1017,7 @@ def couple():
                                         [dict(i) for i in all_incomes],
                                         [dict(b) for b in all_bills],
                                         paid_ids=paid_ids,
-                                        reserve=float(get_setting('reserve_amount', '300')))
+                                        reserve=parse_brl(get_setting('reserve_amount', '300'), 300.0))
 
     return render_template('couple.html',
         mode='view',
@@ -998,8 +1033,8 @@ def couple():
         shared_total=shared_total,
         upcoming=upcoming, overdue=overdue,
         month=month, year=year, today=today,
-        month_name=calendar.month_name[month],
-        months_list=[(m, calendar.month_name[m]) for m in range(1, 13)],
+        month_name=MESES_PT[month],
+        months_list=[(m, MESES_PT[m]) for m in range(1, 13)],
         incomes_all=incomes_raw,
         cid=cid,
     )
@@ -1073,7 +1108,7 @@ def suggestions():
     conn.close()
 
     bills_q  = filter_by_end_date(bills_q)
-    reserve  = float(get_setting('reserve_amount', '300'))
+    reserve  = parse_brl(get_setting('reserve_amount', '300'), 300.0)
 
     from planner import SmartPlanner
     plan = SmartPlanner().generate_plan(month, year,
@@ -1085,8 +1120,8 @@ def suggestions():
         plan=plan,
         incomes=incomes_q,
         month=month, year=year,
-        month_name=calendar.month_name[month],
-        months_list=[(m, calendar.month_name[m]) for m in range(1, 13)],
+        month_name=MESES_PT[month],
+        months_list=[(m, MESES_PT[m]) for m in range(1, 13)],
     )
 
 

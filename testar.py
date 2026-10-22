@@ -155,6 +155,37 @@ check('POST /bills/delete',   'POST', f'/bills/delete/{bill_id3}')
 check('POST /couples/delete', 'POST', f'/couples/delete/{couple_id}')
 check('POST /users/delete',   'POST', f'/users/delete/{uid2}')
 
+# ── Formato pt-BR ─────────────────────────────────────────────
+def check_eq(name, got, want):
+    ok = got == want
+    results.append((name, 'PASS' if ok else f'FAIL: {got!r} != {want!r}', '-'))
+
+# Regressao: valor com separador de milhar precisa ser salvo certo.
+# Antes, float('4.500,00'.replace(',','.')) estourava com erro 500.
+check('POST /bills/add (milhar)', 'POST', '/bills/add',
+      {'name':'Aluguel caro','amount':'4.500,00','due_day':'5','category':'moradia',
+       'priority':'1','is_recurring':'on','notes':'','owner_id':str(uid1)})
+_milhar = db_query("SELECT amount FROM bills WHERE name = 'Aluguel caro'")
+check_eq('milhar salvo como 4500', _milhar[0]['amount'] if _milhar else None, 4500.0)
+
+check('POST /incomes/add (milhar)', 'POST', '/incomes/add',
+      {'name':'Salario alto','amount':'12.345,67','day_of_month':'5',
+       'type':'salary','notes':'','owner_id':str(uid1)})
+_sal = db_query("SELECT amount FROM incomes WHERE name = 'Salario alto'")
+check_eq('renda milhar salva', _sal[0]['amount'] if _sal else None, 12345.67)
+
+check_eq('brl centavos',      flask_app.format_brl(300),       '300,00')
+check_eq('brl milhar',        flask_app.format_brl(4500),      '4.500,00')
+check_eq('brl milhao',        flask_app.format_brl(1234567.89), '1.234.567,89')
+check_eq('brl quebrado',      flask_app.format_brl(1234.5),    '1.234,50')
+check_eq('brl zero',          flask_app.format_brl(0),         '0,00')
+check_eq('brl None',          flask_app.format_brl(None),      '0,00')
+check_eq('brl negativo',      flask_app.format_brl(-1234.56),  '-1.234,56')
+check_eq('brl arredonda',     flask_app.format_brl(0.005),     '0,01')
+check_eq('mes janeiro',       flask_app.MESES_PT[1],           'Janeiro')
+check_eq('mes outubro',       flask_app.MESES_PT[10],          'Outubro')
+check_eq('mes dezembro',      flask_app.MESES_PT[12],          'Dezembro')
+
 # ── Limpeza ────────────────────────────────────────────────────────────────────
 try:
     os.unlink(test_db)

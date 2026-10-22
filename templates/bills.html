@@ -123,10 +123,10 @@
       <div class="d-flex align-items-center gap-3">
         <div class="text-end">
           <div class="fw-bold {% if is_paid %}text-muted{% elif overdue %}text-danger{% else %}text-white{% endif %}">
-            R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
+            R$ {{ b['amount']|brl }}
           </div>
           {% if is_paid and payment and payment['amount_paid'] != b['amount'] %}
-          <small class="text-muted">Pago: R$ {{ "%.2f"|format(payment['amount_paid']) }}</small>
+          <small class="text-muted">Pago: R$ {{ payment['amount_paid']|brl }}</small>
           {% endif %}
         </div>
         <div class="d-flex gap-1">

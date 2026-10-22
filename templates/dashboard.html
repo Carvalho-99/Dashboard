@@ -29,14 +29,14 @@
   <div class="col-6 col-lg-3">
     <div class="stat-card">
       <div class="stat-icon text-success"><i class="bi bi-arrow-down-circle-fill"></i></div>
-      <div class="stat-value text-success">R$ {{ "%.2f"|format(total_inc)|replace('.', ',') }}</div>
+      <div class="stat-value text-success">R$ {{ total_inc|brl }}</div>
       <div class="stat-label">Total que entra</div>
     </div>
   </div>
   <div class="col-6 col-lg-3">
     <div class="stat-card">
       <div class="stat-icon text-danger"><i class="bi bi-arrow-up-circle-fill"></i></div>
-      <div class="stat-value text-danger">R$ {{ "%.2f"|format(total_bill)|replace('.', ',') }}</div>
+      <div class="stat-value text-danger">R$ {{ total_bill|brl }}</div>
       <div class="stat-label">
         Total de contas
         {% if total_inc > 0 %}
@@ -54,7 +54,7 @@
         <i class="bi bi-piggy-bank-fill"></i>
       </div>
       <div class="stat-value {% if balance >= 0 %}text-info{% else %}text-warning{% endif %}">
-        R$ {{ "%.2f"|format(balance)|replace('.', ',') }}
+        R$ {{ balance|brl }}
       </div>
       <div class="stat-label">Sobra por mês</div>
     </div>
@@ -72,16 +72,16 @@
 <div class="card p-3 mb-4">
   <div class="d-flex justify-content-between align-items-center mb-2">
     <span class="fw-semibold"><i class="bi bi-list-check text-primary me-2"></i>Progresso do mês</span>
-    <span class="text-muted small">{{ paid_count }} de {{ bills|length }} contas pagas (R$ {{ "%.2f"|format(total_paid) }})</span>
+    <span class="text-muted small">{{ paid_count }} de {{ bills|length }} contas pagas (R$ {{ total_paid|brl }})</span>
   </div>
   <div class="progress" style="height:10px;">
     <div class="progress-bar bg-success" style="width:{{ bills_progress }}%"></div>
   </div>
   {% if bills %}
   <div class="d-flex justify-content-between mt-1">
-    <small class="text-muted">R$ 0</small>
+    <small class="text-muted">R$ 0,00</small>
     <small class="text-success fw-semibold">{{ bills_progress }}%</small>
-    <small class="text-muted">R$ {{ "%.2f"|format(total_bill) }}</small>
+    <small class="text-muted">R$ {{ total_bill|brl }}</small>
   </div>
   {% endif %}
 
@@ -111,7 +111,7 @@
       {% for b in overdue %}
       <div class="alert-bill-item">
         <span>{{ b['name'] }}</span>
-        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+        <span class="text-danger fw-bold">R$ {{ b['amount']|brl }}</span>
       </div>
       {% endfor %}
     </div>
@@ -125,7 +125,7 @@
         <span>{{ b['name'] }}</span>
         <div class="d-flex align-items-center gap-2">
           <span class="badge bg-secondary">dia {{ b['due_day'] }}</span>
-          <span class="text-warning fw-bold">R$ {{ "%.2f"|format(b['amount']) }}</span>
+          <span class="text-warning fw-bold">R$ {{ b['amount']|brl }}</span>
         </div>
       </div>
       {% endfor %}
@@ -193,7 +193,7 @@
         <!-- Valor + ações -->
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
           <span class="small fw-bold {% if is_paid_d %}text-muted{% endif %}">
-            R$ {{ "%.2f"|format(b['amount'])|replace('.', ',') }}
+            R$ {{ b['amount']|brl }}
           </span>
           {% if not is_paid_d %}
           <button class="btn-icon" style="font-size:0.8rem"
@@ -239,12 +239,12 @@
             <div class="small fw-semibold">{{ i['name'] }}</div>
             <div class="small text-muted">Recebe no dia {{ i['day_of_month'] }}</div>
           </div>
-          <span class="text-success fw-bold">R$ {{ "%.2f"|format(i['amount']) }}</span>
+          <span class="text-success fw-bold">R$ {{ i['amount']|brl }}</span>
         </div>
         {% endfor %}
         <div class="d-flex justify-content-between pt-2">
           <span class="small text-muted">Total mensal</span>
-          <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_inc) }}</span>
+          <span class="fw-bold text-success">R$ {{ total_inc|brl }}</span>
         </div>
       {% else %}
       <div class="text-center text-muted py-3">
@@ -366,7 +366,7 @@ fetch('/api/chart-data').then(r => r.json()).then(data => {
         },
         tooltip: {
           callbacks: {
-            label: ctx => ` R$ ${ctx.raw.toFixed(2).replace('.', ',')} — ${ctx.label}`
+            label: ctx => ` R$ ${brl(ctx.raw)} — ${ctx.label}`
           }
         }
       }

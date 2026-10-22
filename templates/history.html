@@ -15,7 +15,7 @@
                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'] %}
         <i class="bi bi-calendar3 me-2 text-primary"></i>{{ months[mo] }} {{ yr }}
       </span>
-      <span class="text-success fw-bold">R$ {{ "%.2f"|format(data.total)|replace('.', ',') }} pagos</span>
+      <span class="text-success fw-bold">R$ {{ data.total|brl }} pagos</span>
     </div>
     <div class="card-body p-0">
       {% for p in data.payments %}
@@ -31,7 +31,7 @@
             </div>
           </div>
         </div>
-        <span class="fw-bold text-success">R$ {{ "%.2f"|format(p['amount_paid'])|replace('.', ',') }}</span>
+        <span class="fw-bold text-success">R$ {{ p['amount_paid']|brl }}</span>
       </div>
       {% endfor %}
     </div>

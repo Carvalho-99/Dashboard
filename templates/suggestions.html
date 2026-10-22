@@ -33,20 +33,20 @@
 <div class="row g-3 mb-4">
   <div class="col-4">
     <div class="mini-stat">
-      <div class="mini-stat-value text-success">R$ {{ "%.2f"|format(plan.total_income)|replace('.', ',') }}</div>
+      <div class="mini-stat-value text-success">R$ {{ plan.total_income|brl }}</div>
       <div class="mini-stat-label">Renda total</div>
     </div>
   </div>
   <div class="col-4">
     <div class="mini-stat">
-      <div class="mini-stat-value text-danger">R$ {{ "%.2f"|format(plan.total_bills)|replace('.', ',') }}</div>
+      <div class="mini-stat-value text-danger">R$ {{ plan.total_bills|brl }}</div>
       <div class="mini-stat-label">Total de contas</div>
     </div>
   </div>
   <div class="col-4">
     <div class="mini-stat">
       <div class="mini-stat-value {% if plan.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
-        R$ {{ "%.2f"|format(plan.savings)|replace('.', ',') }}
+        R$ {{ plan.savings|brl }}
       </div>
       <div class="mini-stat-label">{% if plan.savings >= 0 %}Sobra{% else %}Déficit{% endif %}</div>
     </div>
@@ -79,7 +79,7 @@
         <div class="fw-semibold small">{{ bill.name }}</div>
         <small class="text-muted">Vence dia {{ bill.due_day }}</small>
       </div>
-      <div class="fw-bold text-warning">R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+      <div class="fw-bold text-warning">R$ {{ bill.amount|brl }}</div>
     </div>
     {% endfor %}
   </div>
@@ -102,12 +102,12 @@
       </div>
     </div>
     <div class="text-end">
-      <div class="text-success fw-bold">+ R$ {{ "%.2f"|format(step.income.amount)|replace('.', ',') }}</div>
+      <div class="text-success fw-bold">+ R$ {{ step.income.amount|brl }}</div>
       <small class="text-muted">
-        Contas: R$ {{ "%.2f"|format(step.bills_total)|replace('.', ',') }}
+        Contas: R$ {{ step.bills_total|brl }}
         → Sobra:
         <span class="fw-semibold {% if step.balance_after >= 0 %}text-success{% else %}text-danger{% endif %}">
-          R$ {{ "%.2f"|format(step.balance_after)|replace('.', ',') }}
+          R$ {{ step.balance_after|brl }}
         </span>
       </small>
     </div>
@@ -138,9 +138,9 @@
         </div>
       </div>
       <div class="text-end">
-        <div class="fw-bold">- R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+        <div class="fw-bold">- R$ {{ bill.amount|brl }}</div>
         <div class="small {% if ns.bal >= 0 %}text-success{% else %}text-danger{% endif %}" style="font-size:.72rem">
-          → R$ {{ "%.2f"|format(ns.bal)|replace('.', ',') }}
+          → R$ {{ ns.bal|brl }}
         </div>
       </div>
     </div>
@@ -160,7 +160,7 @@
         <div class="fw-semibold small text-warning">{{ bill.name }}</div>
         <small class="text-muted">Vence dia {{ bill.due_day }}</small>
       </div>
-      <div class="fw-bold text-warning">R$ {{ "%.2f"|format(bill.amount)|replace('.', ',') }}</div>
+      <div class="fw-bold text-warning">R$ {{ bill.amount|brl }}</div>
     </div>
     {% endfor %}
     {% endif %}

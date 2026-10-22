@@ -38,7 +38,7 @@
       </div>
 
       <div class="d-flex align-items-center gap-3">
-        <div class="fw-bold text-success fs-5">R$ {{ "%.2f"|format(i['amount'])|replace('.', ',') }}</div>
+        <div class="fw-bold text-success fs-5">R$ {{ i['amount']|brl }}</div>
         <div class="d-flex gap-1">
           <a href="/incomes/edit/{{ i['id'] }}" class="btn-icon" title="Editar">
             <i class="bi bi-pencil"></i>
@@ -58,7 +58,7 @@
   <div class="card p-3 mt-3">
     <div class="d-flex justify-content-between align-items-center">
       <span class="fw-semibold">Total mensal recebido</span>
-      <span class="fs-4 fw-bold text-success">R$ {{ "%.2f"|format(total)|replace('.', ',') }}</span>
+      <span class="fs-4 fw-bold text-success">R$ {{ total|brl }}</span>
     </div>
   </div>
 

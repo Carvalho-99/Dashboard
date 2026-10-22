@@ -76,7 +76,7 @@
           <div class="col-6">
             <label class="form-label fw-semibold">Valor (R$) *</label>
             <input type="text" name="amount" class="form-control"
-                   value="{{ '%.2f'|format(bill['amount'])|replace('.',',') if bill else '' }}"
+                   value="{{ bill['amount']|brl if bill else '' }}"
                    placeholder="0,00" required>
           </div>
           <div class="col-6">
@@ -218,6 +218,7 @@
     </div>
   </div>
 </div>
+{% endblock %}
 
 {% block scripts %}
 <script>
@@ -254,5 +255,4 @@ document.querySelectorAll('.owner-option input').forEach(inp => {
   if (inp.checked) update();
 });
 </script>
-{% endblock %}
 {% endblock %}
