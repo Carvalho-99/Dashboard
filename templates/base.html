@@ -116,6 +116,18 @@
 
 <!-- Conteúdo -->
 <div class="container-fluid px-4 py-3">
+  {% if atualizacao %}
+  <div class="alert alert-info alert-dismissible alerta-atualizacao d-flex align-items-center gap-2 flex-wrap" role="alert">
+    <i class="bi bi-arrow-up-circle-fill"></i>
+    <span>Nova versão disponível: <strong>{{ atualizacao.versao }}</strong>{% if atualizacao.notas %} &mdash; {{ atualizacao.notas }}{% endif %}</span>
+    <button type="button" class="btn btn-sm btn-primary ms-2" id="btn-atualizar"
+            onclick="fetch('/atualizar', {method: 'POST'}).then(r => { if (!r.ok) alert('Não foi possível iniciar a atualização.'); }).catch(() => alert('Não foi possível iniciar a atualização.'))">
+      Atualizar agora
+    </button>
+    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar"></button>
+  </div>
+  {% endif %}
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
     <div class="alert alert-{{ cat }} alert-dismissible fade show d-flex align-items-center gap-2" role="alert">

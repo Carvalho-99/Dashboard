@@ -6,6 +6,10 @@ import os
 import json
 
 import sys
+import threading
+
+import versao
+from atualizador import checar_atualizacao
 
 # Quando empacotado com PyInstaller: templates/static ficam em _MEIPASS,
 # o banco de dados fica ao lado do .exe (DATA_DIR)
@@ -288,6 +292,27 @@ def parse_owner(raw):
     if raw.startswith('couple_'):
         return 0, int(raw.split('_')[1])
     return int(raw), None
+
+
+# Resultado da checagem de versão em segundo plano (None = nada a avisar)
+_atualizacao = None
+
+
+@app.context_processor
+def inject_atualizacao():
+    return {'atualizacao': _atualizacao}
+
+
+def _e_local(req):
+    # só o próprio PC pode disparar a atualização, nunca o celular na rede
+    return req.remote_addr in ('127.0.0.1', '::1')
+
+
+@app.route('/atualizar', methods=['POST'])
+def atualizar():
+    if not _e_local(request):
+        return jsonify(erro='Atualização só pode ser iniciada neste computador.'), 403
+    return jsonify(ok=True)
 
 
 @app.context_processor
@@ -1175,5 +1200,11 @@ if __name__ == '__main__':
         print(f"  (mesmo WiFi)")
     print("  Pressione Ctrl+C para encerrar")
     print("="*52 + "\n")
+
+    def _checar_em_segundo_plano():
+        global _atualizacao
+        _atualizacao = checar_atualizacao(versao.manifest_url())
+
+    threading.Thread(target=_checar_em_segundo_plano, daemon=True).start()
 
     app.run(debug=False, port=port, host='0.0.0.0')

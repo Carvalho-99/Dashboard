@@ -20,7 +20,7 @@ function brlParse(texto) {
 // Auto-dismiss flash alerts after 4s
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
-    document.querySelectorAll('.alert.fade.show').forEach(el => {
+    document.querySelectorAll('.alert.fade.show:not(.alerta-atualizacao)').forEach(el => {
       const bsAlert = bootstrap.Alert.getOrCreateInstance(el);
       bsAlert.close();
     });
