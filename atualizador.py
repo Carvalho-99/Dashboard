@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.request
 import zipfile
@@ -185,6 +186,16 @@ def extrair_pacote(zip_path, destino):
 PORTA = 5050                 # onde o app atende; o auxiliar confirma a troca aqui
 ESPERA_FECHAR = 60           # segundos esperando o app encerrar
 ESPERA_RESPONDER = 90        # segundos esperando a versão nova atender na porta
+
+
+def empacotado():
+    """True só no programa instalado (PyInstaller), False rodando do código-fonte.
+
+    Rodando do fonte, a "pasta do app" é a pasta do projeto: aplicar a troca ali
+    sobrescreveria o código com o conteúdo de um ZIP empacotado. Por isso a troca
+    é recusada fora da versão instalada.
+    """
+    return bool(getattr(sys, 'frozen', False))
 
 
 def pasta_do_app():
@@ -430,8 +441,17 @@ def _flags_auxiliar():
     return flags
 
 
+RECUSA_FONTE = ('a atualização automática só funciona na versão instalada do '
+                'programa, não quando ele roda a partir do código-fonte')
+
+
 def _disparar_auxiliar(script):
-    """Sobe o auxiliar solto do app: ele precisa sobreviver ao encerramento."""
+    """Sobe o auxiliar solto do app: ele precisa sobreviver ao encerramento.
+
+    Última barreira antes da troca de verdade: nada sobe fora da versão instalada.
+    """
+    if not empacotado():
+        raise ValueError(RECUSA_FONTE)
     return subprocess.Popen(
         ['powershell.exe', '-NoProfile', '-NonInteractive',
          '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
@@ -452,8 +472,13 @@ def aplicar_atualizacao(manifesto, pasta_app=None, pid=None, raiz_temp=None):
     falha: extração pela metade nunca vira pacote bom. Enquanto o auxiliar não
     sobe, nada na instalação é alterado — só aparece a cópia do banco.
 
+    Rodando do código-fonte, recusa antes de baixar qualquer coisa: a pasta do
+    app ali é a pasta do projeto.
+
     Levanta exceção se algo falhar. Devolve o caminho do auxiliar disparado.
     """
+    if not empacotado():
+        raise ValueError(RECUSA_FONTE)
     pasta_app = Path(pasta_app) if pasta_app else pasta_do_app()
     pid = os.getpid() if pid is None else int(pid)
     raiz = Path(raiz_temp) if raiz_temp else Path(tempfile.gettempdir())

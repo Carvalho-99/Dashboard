@@ -12,7 +12,7 @@ import time
 from urllib.parse import urlsplit
 
 import versao
-from atualizador import checar_atualizacao, aplicar_atualizacao
+from atualizador import checar_atualizacao, aplicar_atualizacao, empacotado
 
 # Quando empacotado com PyInstaller: templates/static ficam em _MEIPASS,
 # o banco de dados fica ao lado do .exe (DATA_DIR)
@@ -322,6 +322,8 @@ def inject_atualizacao():
         'token_atualizacao': TOKEN_ATUALIZACAO,
         # no celular a faixa avisa, mas quem instala é o PC
         'atualizacao_aqui': _e_local(request),
+        # rodando do código-fonte a faixa avisa, mas não tem o que trocar
+        'atualizacao_instalada': empacotado(),
     }
 
 
@@ -387,6 +389,11 @@ def atualizar():
         return jsonify(erro='Pedido vindo de outra origem foi recusado.'), 403
     if not _token_confere(request):
         return jsonify(erro='Pedido sem autorização desta janela.'), 403
+    if not empacotado():
+        # rodando do fonte, a "pasta do app" é a pasta do projeto: a troca
+        # sobrescreveria o próprio código. Quem instala é a versão empacotada.
+        return jsonify(erro='A atualização automática só funciona na versão '
+                            'instalada do programa.'), 409
     manifesto = _atualizacao
     if not manifesto:
         return jsonify(erro='Não há versão nova para instalar.'), 409

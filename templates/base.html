@@ -120,7 +120,11 @@
   <div class="alert alert-info alert-dismissible alerta-atualizacao d-flex align-items-center gap-2 flex-wrap" role="alert">
     <i class="bi bi-arrow-up-circle-fill"></i>
     <span>Nova versão disponível: <strong>{{ atualizacao.versao }}</strong>{% if atualizacao.notas %} &mdash; {{ atualizacao.notas }}{% endif %}</span>
-    {% if atualizacao_aqui %}
+    {% if not atualizacao_aqui %}
+    <span class="small text-muted">Para instalar, abra o programa no computador.</span>
+    {% elif not atualizacao_instalada %}
+    <span class="small text-muted">Atualização automática só na versão instalada.</span>
+    {% else %}
     <!-- formulário de verdade: a senha desta janela vai junto, e a resposta
          é a própria página de atualização (o servidor encerra em seguida) -->
     <form method="post" action="/atualizar" class="d-inline m-0">
@@ -129,8 +133,6 @@
         Atualizar agora
       </button>
     </form>
-    {% else %}
-    <span class="small text-muted">Para instalar, abra o programa no computador.</span>
     {% endif %}
     <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar"></button>
   </div>

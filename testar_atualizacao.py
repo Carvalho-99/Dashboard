@@ -293,6 +293,61 @@ check_eq('auxiliar dentro do app e recusado',
 check_eq('pacote dentro do app e recusado',
          recusa(lambda: atualizador.gerar_script_troca(1, _inst, _inst / 'novo')), True)
 
+# ── Só a versão instalada instala ────────────────────────────────────────────
+# Rodando do código-fonte, pasta_do_app() é a pasta do projeto: aplicar a troca
+# ali reescreveria o próprio repositório. A suite roda justamente do fonte, então
+# o estado natural aqui é "recusa"; os testes do fluxo normal fingem empacotado.
+import contextlib
+
+@contextlib.contextmanager
+def finge_empacotado():
+    anterior = getattr(sys, 'frozen', None)
+    sys.frozen = True
+    try:
+        yield
+    finally:
+        if anterior is None:
+            del sys.frozen
+        else:
+            sys.frozen = anterior
+
+check_eq('suite roda do codigo-fonte', atualizador.empacotado(), False)
+with finge_empacotado():
+    check_eq('finge empacotado funciona', atualizador.empacotado(), True)
+check_eq('finge empacotado desfaz', atualizador.empacotado(), False)
+check_eq('sys.frozen nao sobrou', hasattr(sys, 'frozen'), False)
+
+_espiao_baixar = []
+_baixar_real = atualizador.baixar_pacote
+
+def _baixar_espiao(manifesto, destino, **kw):
+    _espiao_baixar.append(Path(destino))
+    return _baixar_real(manifesto, destino, **kw)
+
+_app_fonte = montar_instalacao('app_fonte')
+_antes_fonte = retrato(_app_fonte)
+_temp_fonte = _base / 'temp_fonte'
+_temp_fonte.mkdir()
+_resposta.update(status=200, corpo=zip_ok.read_bytes())
+atualizador.baixar_pacote = _baixar_espiao
+_r_fonte = recusa(lambda: atualizador.aplicar_atualizacao(
+    {'versao': '9.9.9', 'url': _URL, 'sha256': sha_real},
+    pasta_app=_app_fonte, pid=1, raiz_temp=_temp_fonte))
+atualizador.baixar_pacote = _baixar_real
+check_eq('do fonte a troca e recusada',      _r_fonte, True)
+check_eq('do fonte nem baixa o pacote',      _espiao_baixar, [])
+check_eq('do fonte nao mexe na instalacao',  retrato(_app_fonte) == _antes_fonte, True)
+check_eq('do fonte nao copia o banco',       list(_app_fonte.glob('financas.db.bak*')), [])
+check_eq('do fonte nao cria temporario',     list(_temp_fonte.iterdir()), [])
+
+# a outra porta de entrada da troca: quem gerar o script na mão e tentar
+# disparar o auxiliar também é recusado fora da versão instalada
+_pasta_burla = _base / 'burla'
+_pasta_burla.mkdir()
+_script_burla = atualizador.gerar_script_troca(1, _app_fonte, extraido, raiz_temp=_pasta_burla)
+check_eq('disparo do fonte e recusado',
+         recusa(lambda: atualizador._disparar_auxiliar(_script_burla)), True)
+
 # ── aplicar_atualizacao: só instala o que confere ────────────────────────────
 _espiao_extrair = []
 _extrair_real = atualizador.extrair_pacote
@@ -309,9 +364,10 @@ _antes_hash = retrato(_app_hash)
 _temp_hash = _base / 'temp_hash'
 _temp_hash.mkdir()
 atualizador.extrair_pacote = _extrair_espiao
-_r_hash = recusa(lambda: atualizador.aplicar_atualizacao(
-    {'versao': '9.9.9', 'url': _URL, 'sha256': 'f' * 64},
-    pasta_app=_app_hash, pid=1, raiz_temp=_temp_hash))
+with finge_empacotado():
+    _r_hash = recusa(lambda: atualizador.aplicar_atualizacao(
+        {'versao': '9.9.9', 'url': _URL, 'sha256': 'f' * 64},
+        pasta_app=_app_hash, pid=1, raiz_temp=_temp_hash))
 atualizador.extrair_pacote = _extrair_real
 check_eq('hash errado aborta',             _r_hash, True)
 check_eq('hash errado nem chega a extrair', _espiao_extrair, [])
@@ -326,9 +382,10 @@ _app_hostil = montar_instalacao('app_hostil')
 _antes_hostil = retrato(_app_hostil)
 _temp_hostil = _base / 'temp_hostil'
 _temp_hostil.mkdir()
-_r_hostil = recusa(lambda: atualizador.aplicar_atualizacao(
-    {'versao': '9.9.9', 'url': _URL, 'sha256': sha(_zip_hostil)},
-    pasta_app=_app_hostil, pid=1, raiz_temp=_temp_hostil))
+with finge_empacotado():
+    _r_hostil = recusa(lambda: atualizador.aplicar_atualizacao(
+        {'versao': '9.9.9', 'url': _URL, 'sha256': sha(_zip_hostil)},
+        pasta_app=_app_hostil, pid=1, raiz_temp=_temp_hostil))
 check_eq('pacote hostil aborta',              _r_hostil, True)
 check_eq('pacote hostil nao mexe no app',     retrato(_app_hostil) == _antes_hostil, True)
 check_eq('pacote hostil nao deixa temporario', list(_temp_hostil.iterdir()), [])
@@ -350,13 +407,15 @@ _temp_meio = _base / 'temp_meio'
 _temp_meio.mkdir()
 _manifesto_bom = {'versao': '9.9.9', 'url': _URL, 'sha256': sha_real}
 atualizador.extrair_pacote = _extrair_pela_metade
-_r1 = recusa(lambda: atualizador.aplicar_atualizacao(
-    _manifesto_bom, pasta_app=_app_meio, pid=1, raiz_temp=_temp_meio))
-_r2 = recusa(lambda: atualizador.aplicar_atualizacao(
-    _manifesto_bom, pasta_app=_app_meio, pid=1, raiz_temp=_temp_meio))
+with finge_empacotado():
+    _r1 = recusa(lambda: atualizador.aplicar_atualizacao(
+        _manifesto_bom, pasta_app=_app_meio, pid=1, raiz_temp=_temp_meio))
+    _r2 = recusa(lambda: atualizador.aplicar_atualizacao(
+        _manifesto_bom, pasta_app=_app_meio, pid=1, raiz_temp=_temp_meio))
 atualizador.extrair_pacote = _extrair_real
 check_eq('extracao pela metade aborta',    _r1 is True and _r2 is True, True)
-check_eq('cada tentativa em pasta nova',   _tentativas[0] != _tentativas[1], True)
+check_eq('cada tentativa em pasta nova',
+         len(_tentativas) == 2 and _tentativas[0] != _tentativas[1], True)
 check_eq('extracao pela metade descartada', list(_temp_meio.iterdir()), [])
 check_eq('extracao pela metade nao mexe no app', retrato(_app_meio) == _antes_meio, True)
 check_eq('extrair_pacote devolvido ao original', atualizador.extrair_pacote is _extrair_real, True)
@@ -372,7 +431,8 @@ _ps_inofensivo.write_text(
     encoding='utf-8-sig')
 _prova = _pasta_disparo / 'prova.txt'
 try:
-    _proc = atualizador._disparar_auxiliar(_ps_inofensivo)
+    with finge_empacotado():
+        _proc = atualizador._disparar_auxiliar(_ps_inofensivo)
     _proc.wait(timeout=30)
     _rc = _proc.returncode
 except Exception as e:
@@ -417,6 +477,18 @@ check_eq('sem origem nem referer recusado', postar(origem=None).status_code, 403
 check_eq('origem sem http recusada',    postar(origem='file:///c:/x').status_code, 403)
 check_eq('nada disparado nas recusas',  _disparos, [])
 
+# rodando do código-fonte (como esta suite): passa o portão e a rota recusa
+flask_app._atualizacao = {'versao': '9.9.9', 'url': 'http://x/p.zip', 'sha256': 'y'}
+_do_fonte = postar()
+_erro_fonte = (_do_fonte.get_json() or {}).get('erro', '')   # pode não ser JSON
+check_eq('rota recusa fora da versao instalada', _do_fonte.status_code, 409)
+check_eq('rota explica o motivo', 'versão instalada' in _erro_fonte, True)
+check_eq('rota do fonte nao disparou',  _disparos, [])
+flask_app._atualizacao = None
+
+# daqui para baixo os testes fingem a versão instalada
+sys.frozen = True
+
 # token e origem certos, mas nada a instalar: passa o portão e recusa depois
 check_eq('sem novidade nao instala',    postar().status_code, 409)
 check_eq('ipv6 localhost passa o portao', postar(addr='::1').status_code, 409)
@@ -431,7 +503,8 @@ check_eq('caminho feliz aceito',        _ok.status_code, 200)
 check_eq('caminho feliz mostra a pagina', b'Instalando a atualiza' in _ok.data, True)
 check_eq('caminho feliz cita a versao nova', b'9.9.9' in _ok.data, True)
 check_eq('caminho feliz disparou uma vez', len(_disparos), 1)
-check_eq('caminho feliz com o manifesto', _disparos[0].get('versao'), '9.9.9')
+check_eq('caminho feliz com o manifesto',
+         (_disparos[0] if _disparos else {}).get('versao'), '9.9.9')
 check_eq('pagina de espera nao consulta o servidor',
          b'fetch(' not in _ok.data and b'setTimeout' not in _ok.data
          and b'http-equiv="refresh"' not in _ok.data, True)
@@ -461,6 +534,16 @@ _html_fora = c.get('/', environ_base={'REMOTE_ADDR': '192.168.0.50'}).data
 check_eq('faixa aparece no celular',    b'alerta-atualizacao' in _html_fora, True)
 check_eq('celular sem botao',           b'btn-atualizar' in _html_fora, False)
 check_eq('celular sem a senha',         TOKEN.encode() in _html_fora, False)
+
+# fim do faz de conta: do código-fonte a faixa aparece, mas sem botão
+del sys.frozen
+_html_fonte = c.get('/').data
+check_eq('faixa aparece rodando do fonte', b'alerta-atualizacao' in _html_fonte, True)
+check_eq('fonte sem botao',                b'btn-atualizar' in _html_fonte, False)
+check_eq('fonte sem a senha',              TOKEN.encode() in _html_fonte, False)
+check_eq('fonte explica o motivo',
+         'só na versão instalada'.encode() in _html_fonte, True)
+
 flask_app._atualizacao = None
 check_eq('sem faixa a senha nao aparece', TOKEN.encode() in c.get('/').data, False)
 _js = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'script.js'), encoding='utf-8').read()
