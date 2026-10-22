@@ -192,21 +192,30 @@ try:
 except Exception:
     pass
 
+def _imprimir(texto):
+    """Imprime sem quebrar o console: cp1252 nao aceita todo caractere."""
+    try:
+        print(texto)
+    except UnicodeEncodeError:
+        cod = getattr(sys.stdout, 'encoding', None) or 'ascii'
+        print(texto.encode(cod, 'replace').decode(cod, 'replace'))
+
+
 # ── Resultado ─────────────────────────────────────────────────────────────────
 passed  = sum(1 for _, s, _ in results if s == 'PASS')
 failed  = [(n, s, c) for n, s, c in results if s != 'PASS']
 total   = len(results)
 
-print(f"\n{'='*62}")
-print(f"  RESULTADO FINAL: {passed}/{total} passaram")
-print(f"{'='*62}")
+_imprimir(f"\n{'='*62}")
+_imprimir(f"  RESULTADO FINAL: {passed}/{total} passaram")
+_imprimir(f"{'='*62}")
 for name, status, code in results:
     icon = 'OK' if status == 'PASS' else 'XX'
-    print(f"  {icon} {name:<40} {code}")
+    _imprimir(f"  {icon} {name:<40} {code}")
 if failed:
-    print(f"\n  ── FALHAS ──")
+    _imprimir("\n  -- FALHAS --")
     for name, status, code in failed:
-        print(f"  XX {name}: {status} (HTTP {code})")
+        _imprimir(f"  XX {name}: {status} (HTTP {code})")
 else:
-    print(f"\n  Nenhuma falha encontrada.")
-print(f"{'='*62}\n")
+    _imprimir("\n  Nenhuma falha encontrada.")
+_imprimir(f"{'='*62}\n")
