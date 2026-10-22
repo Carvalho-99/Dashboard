@@ -167,6 +167,13 @@ check_eq('zip UNC recusado',           extrair_recusa(_B + _B + 'servidor' + _B 
 check_eq('nada escrito fora do destino',
          any(p.exists() for p in (_base / 'fora.txt', _base.parent / 'fora.txt', _base.parent.parent / 'fora.txt')), False)
 
+check_eq('entrada "." recusada com ValueError',  extrair_recusa('.', 'ponto'), True)
+check_eq('entrada "./" recusada com ValueError', extrair_recusa('./', 'pontobarra'), True)
+# conflito de nomes (arquivo e depois pasta de mesmo nome): ValueError, não FileExistsError
+_zc = montar_zip(_base / 'conflito.zip', nomes_extra=['LEIA-ME.txt/b'])
+check_eq('conflito arquivo/pasta vira ValueError',
+         recusa(lambda: atualizador.extrair_pacote(_zc, _base / 'dest_conflito')), True)
+
 def extrair_recusa_conteudo(itens):
     zp = montar_zip(_base / 'incompleto.zip', itens=itens)
     return recusa(lambda: atualizador.extrair_pacote(zp, _base / 'dest_incompleto'))

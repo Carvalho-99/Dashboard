@@ -4,6 +4,7 @@ import json
 import os
 import urllib.request
 import zipfile
+import zlib
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlparse
 
@@ -128,25 +129,35 @@ def extrair_pacote(zip_path, destino):
             nome = info.filename
             if not _nome_seguro(nome):
                 raise ValueError(f'entrada recusada no pacote: {nome!r}')
-            alvo = (raiz / nome).resolve()
+            try:
+                alvo = (raiz / nome).resolve()
+            except (OSError, ValueError):
+                raise ValueError(f'entrada inválida no pacote: {nome!r}')
             if alvo != raiz and raiz not in alvo.parents:
                 raise ValueError(f'entrada fora da pasta de destino: {nome!r}')
-            topo.add(PurePosixPath(nome.replace(chr(92), '/')).parts[0])
+            partes = PurePosixPath(nome.replace(chr(92), '/')).parts
+            if not partes:   # '.' ou './': sem caminho utilizável
+                raise ValueError(f'entrada sem caminho no pacote: {nome!r}')
+            topo.add(partes[0])
         faltando = [i for i in versao.ITENS_DO_PROGRAMA if i not in topo]
         if faltando:
             raise ValueError(f'pacote incompleto, faltam: {", ".join(faltando)}')
-        for info in entradas:
-            alvo = (raiz / info.filename).resolve()
-            if info.is_dir():
-                alvo.mkdir(parents=True, exist_ok=True)
-                continue
-            alvo.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(info) as origem, open(alvo, 'wb') as saida:
-                while True:
-                    bloco = origem.read(1024 * 1024)
-                    if not bloco:
-                        break
-                    saida.write(bloco)
+        try:
+            for info in entradas:
+                alvo = (raiz / info.filename).resolve()
+                if info.is_dir():
+                    alvo.mkdir(parents=True, exist_ok=True)
+                    continue
+                alvo.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as origem, open(alvo, 'wb') as saida:
+                    while True:
+                        bloco = origem.read(1024 * 1024)
+                        if not bloco:
+                            break
+                        saida.write(bloco)
+        except (OSError, zipfile.BadZipFile, zlib.error, EOFError, RuntimeError, NotImplementedError) as e:
+            # entrada corrompida, criptografada, conflito de nomes (a e a/b) etc.
+            raise ValueError(f'falha ao extrair o pacote: {e}')
     for item in versao.ITENS_DO_PROGRAMA:
         if not (raiz / item).exists():
             raise ValueError(f'item ausente após extração: {item}')
