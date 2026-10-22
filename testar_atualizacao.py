@@ -2,7 +2,8 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import tempfile, threading
+import tempfile, threading, hashlib, zipfile
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import versao
@@ -84,6 +85,116 @@ check_eq('json nao e objeto',      checar('[1,2]')                              
 check_eq('http 404',               checar_status(404)                                  is None,     True)
 check_eq('host inexistente',       checar_url('http://127.0.0.1:1/version.json')       is None,     True)
 check_eq('url vazia',              checar_url('')                                      is None,     True)
+
+# esquema e tamanho do manifesto
+_tmp_m = tempfile.mkdtemp(prefix='orgfin_manifesto_')
+_arq_m = Path(_tmp_m) / 'version.json'
+_arq_m.write_text('{"versao":"9.9.9","url":"x","sha256":"y"}', encoding='utf-8')
+check_eq('manifesto valido em disco existe', _arq_m.is_file(), True)
+check_eq('file:// recusado mesmo valido', checar_url(_arq_m.as_uri()) is None, True)
+check_eq('ftp:// recusado',               checar_url('ftp://127.0.0.1/version.json') is None, True)
+check_eq('manifesto gigante recusado',
+         checar('{"versao":"9.9.9","url":"x","sha256":"y"}' + ' ' * (5 * 1024 * 1024)) is None, True)
+check_eq('manifesto no limite aceito',
+         checar('{"versao":"9.9.9","url":"x","sha256":"y"}' + ' ' * 1000) is not None, True)
+
+# ── Download, hash e extração ────────────────────────────────────────────────
+ITENS = versao.ITENS_DO_PROGRAMA
+
+def montar_zip(caminho, nomes_extra=(), itens=ITENS):
+    """ZIP com os itens do programa (+ entradas extras, com nome cru via ZipInfo)."""
+    with zipfile.ZipFile(caminho, 'w') as z:
+        for item in itens:
+            if item == '_internal':
+                z.writestr('_internal/base.dll', b'dll')
+            else:
+                z.writestr(item, b'conteudo ' + item.encode())
+        for nome in nomes_extra:
+            zi = zipfile.ZipInfo('x')
+            zi.filename = nome   # atribuição direta: o construtor trocaria barra invertida por '/'
+            z.writestr(zi, b'hostil')
+    return caminho
+
+_base = Path(tempfile.mkdtemp(prefix='orgfin_zip_')) / 'a' / 'b'   # pais exclusivos deste teste
+_base.mkdir(parents=True)
+zip_ok = montar_zip(_base / 'ok.zip')
+sha_real = hashlib.sha256(zip_ok.read_bytes()).hexdigest()
+zip_truncado = _base / 'cortado.zip'
+zip_truncado.write_bytes(zip_ok.read_bytes()[:-20])
+
+check_eq('hash confere',            atualizador.conferir_hash(zip_ok, sha_real),           True)
+check_eq('hash nao confere',        atualizador.conferir_hash(zip_ok, 'f' * 64),           False)
+check_eq('hash de arquivo cortado', atualizador.conferir_hash(zip_truncado, sha_real),     False)
+check_eq('hash insensivel a caixa', atualizador.conferir_hash(zip_ok, sha_real.upper()),   True)
+check_eq('hash de arquivo ausente', atualizador.conferir_hash(_base / 'nao_existe.zip', sha_real), False)
+
+_dest = _base / 'extraido'
+extraido = atualizador.extrair_pacote(zip_ok, _dest)
+check_eq('extrai itens', sorted(p.name for p in extraido.iterdir()) == sorted(ITENS), True)
+check_eq('extrai conteudo da subpasta', (extraido / '_internal' / 'base.dll').read_bytes(), b'dll')
+
+def recusa(chamada):
+    try:
+        chamada()
+    except ValueError:
+        return True
+    except Exception as e:
+        return f'outra excecao: {e!r}'
+    return False
+
+def extrair_recusa(nome_hostil, tag):
+    """Monta ZIP (itens válidos + 1 entrada hostil), confere que o nome hostil
+    realmente está no arquivo, e espera ValueError sem nada escrito."""
+    zp = montar_zip(_base / f'hostil_{tag}.zip', nomes_extra=[nome_hostil])
+    # fixture precisa conter o nome cru nos bytes do arquivo (o zipfile normaliza
+    # barras ao LER no Windows, então a prova é nos bytes, não no namelist)
+    if nome_hostil.encode() not in zp.read_bytes():
+        return 'fixture sanitizada: teste nao prova nada'
+    dest = _base / f'dest_{tag}'
+    r = recusa(lambda: atualizador.extrair_pacote(zp, dest))
+    if r is True and any(dest.rglob('*')):
+        return 'recusou mas ja tinha escrito arquivos'
+    return r
+
+_B = chr(92)
+check_eq('zip-slip recusado',          extrair_recusa('../../fora.txt', 'slip'), True)
+check_eq('zip-slip com barra invertida', extrair_recusa('..' + _B + '..' + _B + 'fora.txt', 'slipb'), True)
+check_eq('zip-slip no meio do caminho', extrair_recusa('_internal/../../fora.txt', 'slipm'), True)
+check_eq('zip absoluto recusado',      extrair_recusa('C:/Windows/fora.txt', 'abs'), True)
+check_eq('zip absoluto barra invertida', extrair_recusa('C:' + _B + 'Windows' + _B + 'fora.txt', 'absb'), True)
+check_eq('zip absoluto unix recusado', extrair_recusa('/etc/fora.txt', 'absu'), True)
+check_eq('zip UNC recusado',           extrair_recusa(_B + _B + 'servidor' + _B + 'pasta' + _B + 'fora.txt', 'unc'), True)
+check_eq('nada escrito fora do destino',
+         any(p.exists() for p in (_base / 'fora.txt', _base.parent / 'fora.txt', _base.parent.parent / 'fora.txt')), False)
+
+def extrair_recusa_conteudo(itens):
+    zp = montar_zip(_base / 'incompleto.zip', itens=itens)
+    return recusa(lambda: atualizador.extrair_pacote(zp, _base / 'dest_incompleto'))
+
+check_eq('zip sem os itens recusado',  extrair_recusa_conteudo(['leia.txt']), True)
+check_eq('zip faltando 1 item recusado', extrair_recusa_conteudo(list(ITENS[:-1])), True)
+(_base / 'lixo.zip').write_bytes(b'isto nao e um zip')
+check_eq('arquivo nao-zip recusado',   recusa(lambda: atualizador.extrair_pacote(_base / 'lixo.zip', _base / 'dest_lixo')), True)
+
+# baixar_pacote contra o servidor local
+_resposta.update(status=200, corpo=zip_ok.read_bytes())
+_dir_dl = _base / 'baixado'
+baixado = atualizador.baixar_pacote({'url': _URL}, _dir_dl)
+check_eq('baixa o pacote inteiro',     baixado.read_bytes() == zip_ok.read_bytes(), True)
+check_eq('baixado confere hash',       atualizador.conferir_hash(baixado, sha_real), True)
+check_eq('sem .parcial apos sucesso',  list(_dir_dl.glob('*.parcial')), [])
+check_eq('file:// no download recusado',
+         recusa(lambda: atualizador.baixar_pacote({'url': zip_ok.as_uri()}, _base / 'dl_file')), True)
+check_eq('file:// nao criou pacote',   (_base / 'dl_file' / 'pacote.zip').exists(), False)
+_resposta.update(status=404, corpo=b'nao achou')
+_dir_404 = _base / 'dl_404'
+try:
+    atualizador.baixar_pacote({'url': _URL}, _dir_404)
+    _levantou = False
+except Exception:
+    _levantou = True
+check_eq('http 404 no download levanta', _levantou, True)
+check_eq('404 nao deixa pacote nem parcial', list(_dir_404.iterdir()), [])
 _srv.shutdown()
 
 # ── Origem da rota /atualizar ────────────────────────────────────────────────
