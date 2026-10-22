@@ -137,4 +137,16 @@ Todos os seus dados ficam no arquivo:
   → Abra o Chrome/Edge e acesse: http://SEU-IP:5050
      Para saber seu IP: Menu Iniciar → "cmd" → ipconfig → IPv4
 
+"Atualizei e o programa não abre mais"
+  → Seus dados estão salvos: o arquivo financas.db não é
+    alterado pela atualização, e antes dela é guardada uma
+    cópia (financas.db.bak-...) nesta mesma pasta.
+  → Se nesta pasta existirem arquivos terminando em .old,
+    a atualização parou no meio. Para voltar a versão que
+    funcionava, apague o arquivo (ou a pasta) de mesmo nome
+    sem o .old e tire o ".old" do final do nome. Exemplo:
+       _internal.old  →  _internal
+  → O que aconteceu fica escrito no arquivo atualizacao.log,
+    nesta pasta. Mande esse arquivo junto ao pedir ajuda.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
