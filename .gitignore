@@ -31,3 +31,6 @@ desktop.ini
 
 # Logs
 *.log
+
+# Workspace do subagent-driven-development (scratch)
+.superpowers/
