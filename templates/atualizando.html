@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atualizando — Organizador Financeiro</title>
+  <!-- Página de pé sozinha: nada de arquivo externo, nada de consulta ao
+       servidor. O programa encerra segundos depois de servir isto. -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; padding: 24px;
+      background: #0f172a; color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 15px;
+    }
+    .caixa {
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 28px 30px; max-width: 540px; width: 100%;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 4px; }
+    .versao { color: #94a3b8; font-size: 0.9rem; margin: 0 0 20px; }
+    .barra { height: 6px; border-radius: 3px; background: #253347; overflow: hidden; margin-bottom: 22px; }
+    .barra span {
+      display: block; height: 100%; width: 40%; border-radius: 3px; background: #3b82f6;
+      animation: anda 1.6s ease-in-out infinite;
+    }
+    @keyframes anda {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+    ul { margin: 0 0 20px; padding-left: 20px; line-height: 1.7; }
+    li::marker { color: #3b82f6; }
+    .aviso {
+      border-left: 3px solid #f59e0b; background: #253347;
+      padding: 12px 14px; border-radius: 6px; line-height: 1.6;
+    }
+    .aviso strong { color: #f59e0b; }
+    .rodape { color: #94a3b8; font-size: 0.85rem; margin: 18px 0 0; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="caixa">
+    <h1>Instalando a atualização</h1>
+    <p class="versao">
+      Da versão {{ versao_atual }} para a versão {{ versao_nova }}
+    </p>
+
+    <div class="barra"><span></span></div>
+
+    <ul>
+      <li>O programa baixa a versão nova, fecha e abre de novo sozinho.</li>
+      <li>Suas contas, rendas e pagamentos continuam onde estão.</li>
+      <li>Antes da troca é guardada uma cópia do banco de dados na mesma
+          pasta, com o nome <code>financas.db.bak-{{ versao_atual }}</code>.</li>
+      <li>Se a versão nova não abrir, a anterior volta sozinha.</li>
+    </ul>
+
+    <p class="aviso">
+      <strong>Não desligue o computador agora.</strong>
+      Esta página vai parar de responder em alguns segundos — é o programa
+      encerrando para trocar os arquivos. É normal.
+    </p>
+
+    <p class="rodape">
+      Em até dois minutos o Organizador Financeiro abre de novo por conta
+      própria. Se isso não acontecer, abra o programa pelo atalho de sempre:
+      seus dados estão intactos.
+    </p>
+  </div>
+</body>
+</html>

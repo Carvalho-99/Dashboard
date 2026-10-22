@@ -120,10 +120,18 @@
   <div class="alert alert-info alert-dismissible alerta-atualizacao d-flex align-items-center gap-2 flex-wrap" role="alert">
     <i class="bi bi-arrow-up-circle-fill"></i>
     <span>Nova versão disponível: <strong>{{ atualizacao.versao }}</strong>{% if atualizacao.notas %} &mdash; {{ atualizacao.notas }}{% endif %}</span>
-    <button type="button" class="btn btn-sm btn-primary ms-2" id="btn-atualizar"
-            onclick="fetch('/atualizar', {method: 'POST'}).then(r => { if (!r.ok) alert('Não foi possível iniciar a atualização.'); }).catch(() => alert('Não foi possível iniciar a atualização.'))">
-      Atualizar agora
-    </button>
+    {% if atualizacao_aqui %}
+    <!-- formulário de verdade: a senha desta janela vai junto, e a resposta
+         é a própria página de atualização (o servidor encerra em seguida) -->
+    <form method="post" action="/atualizar" class="d-inline m-0">
+      <input type="hidden" name="token" value="{{ token_atualizacao }}">
+      <button type="submit" class="btn btn-sm btn-primary ms-2" id="btn-atualizar">
+        Atualizar agora
+      </button>
+    </form>
+    {% else %}
+    <span class="small text-muted">Para instalar, abra o programa no computador.</span>
+    {% endif %}
     <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar"></button>
   </div>
   {% endif %}

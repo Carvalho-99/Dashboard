@@ -7,9 +7,12 @@ import json
 
 import sys
 import threading
+import secrets
+import time
+from urllib.parse import urlsplit
 
 import versao
-from atualizador import checar_atualizacao
+from atualizador import checar_atualizacao, aplicar_atualizacao
 
 # Quando empacotado com PyInstaller: templates/static ficam em _MEIPASS,
 # o banco de dados fica ao lado do .exe (DATA_DIR)
@@ -297,10 +300,14 @@ def parse_owner(raw):
 # Resultado da checagem de versão em segundo plano (None = nada a avisar)
 _atualizacao = None
 
+# Senha de uma sessão só: nasce a cada abertura do programa, vive na memória
+# deste processo e vai no formulário da faixa. Sem ela a rota recusa.
+TOKEN_ATUALIZACAO = secrets.token_urlsafe(32)
 
-@app.context_processor
-def inject_atualizacao():
-    return {'atualizacao': _atualizacao}
+# Uma atualização por vez: dois cliques seriam duas trocas na mesma pasta,
+# cada auxiliar desfazendo o trabalho do outro.
+_lock_atualizacao = threading.Lock()
+_atualizando = False
 
 
 def _e_local(req):
@@ -308,11 +315,92 @@ def _e_local(req):
     return req.remote_addr in ('127.0.0.1', '::1')
 
 
+@app.context_processor
+def inject_atualizacao():
+    return {
+        'atualizacao': _atualizacao,
+        'token_atualizacao': TOKEN_ATUALIZACAO,
+        # no celular a faixa avisa, mas quem instala é o PC
+        'atualizacao_aqui': _e_local(request),
+    }
+
+
+def _reservar_atualizacao():
+    global _atualizando
+    with _lock_atualizacao:
+        if _atualizando:
+            return False
+        _atualizando = True
+        return True
+
+
+def _liberar_atualizacao():
+    global _atualizando
+    with _lock_atualizacao:
+        _atualizando = False
+
+
+def _mesma_origem(req):
+    """True se o pedido saiu de uma página servida por este mesmo endereço.
+
+    Sem esta conferência, qualquer site aberto no navegador poderia postar em
+    /atualizar: um formulário de outro site não pede licença ao navegador e
+    chega aqui como 127.0.0.1, passando pelo _e_local.
+    """
+    bruto = (req.headers.get('Origin') or req.headers.get('Referer') or '').strip()
+    if not bruto:
+        return False          # sem origem declarada não há como confiar
+    try:
+        partes = urlsplit(bruto)
+    except Exception:
+        return False
+    if partes.scheme.lower() not in ('http', 'https'):
+        return False
+    return bool(partes.netloc) and partes.netloc.lower() == (req.host or '').lower()
+
+
+def _token_confere(req):
+    enviado = req.form.get('token') or req.headers.get('X-Token-Atualizacao') or ''
+    return bool(enviado) and secrets.compare_digest(str(enviado), TOKEN_ATUALIZACAO)
+
+
+def _disparar_atualizacao(manifesto):
+    """Instala fora da requisição e encerra o app para o auxiliar poder trocar."""
+    def tarefa():
+        try:
+            aplicar_atualizacao(manifesto)
+        except Exception as e:
+            print(f'  Atualização não aplicada: {e}')
+            _liberar_atualizacao()   # a pessoa pode tentar de novo
+            return
+        time.sleep(1.5)   # a resposta já saiu; dá tempo do navegador receber
+        os._exit(0)       # o auxiliar está esperando este processo sair
+    threading.Thread(target=tarefa, daemon=True).start()
+
+
 @app.route('/atualizar', methods=['POST'])
 def atualizar():
+    # três camadas, não três alternativas: endereço, origem e senha da janela
     if not _e_local(request):
         return jsonify(erro='Atualização só pode ser iniciada neste computador.'), 403
-    return jsonify(ok=True)
+    if not _mesma_origem(request):
+        return jsonify(erro='Pedido vindo de outra origem foi recusado.'), 403
+    if not _token_confere(request):
+        return jsonify(erro='Pedido sem autorização desta janela.'), 403
+    manifesto = _atualizacao
+    if not manifesto:
+        return jsonify(erro='Não há versão nova para instalar.'), 409
+    if not _reservar_atualizacao():
+        return jsonify(erro='A atualização já está em andamento.'), 409
+    try:
+        pagina = render_template('atualizando.html',
+                                 versao_atual=versao.VERSAO,
+                                 versao_nova=manifesto.get('versao', ''))
+    except Exception:
+        _liberar_atualizacao()
+        raise
+    _disparar_atualizacao(manifesto)
+    return pagina
 
 
 @app.context_processor
