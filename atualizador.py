@@ -188,6 +188,7 @@ ESPERA_FECHAR = 60           # segundos esperando o app encerrar
 ESPERA_RESPONDER = 90        # segundos esperando a versão nova atender na porta
 ESPERA_GRACA = 25            # antes disso, não desiste nem sem servidor no ar
 ESPERA_VOLTA = 30            # segundos esperando a versão anterior voltar
+LIMITE_LOG = 64 * 1024       # bytes; passando disso o registro recomeça
 
 
 def empacotado():
@@ -236,7 +237,30 @@ def _ps(valor):
 # gerar_script_troca. Mexe só nos nomes de $itens: nada de pasta inteira.
 CORPO_TROCA = r'''
 function Anotar($msg) {
-  try { Add-Content -LiteralPath $log -Value ("{0}  {1}" -f (Get-Date -Format 'HH:mm:ss'), $msg) } catch { }
+  try {
+    # registro de apoio, nao historico: passando do teto, recomeca
+    if (Test-Path -LiteralPath $log) {
+      if ((Get-Item -LiteralPath $log).Length -gt $limiteLog) {
+        Set-Content -LiteralPath $log -Encoding UTF8 `
+          -Value ("{0}  --- registro reiniciado (passou de $limiteLog bytes) ---" -f (Get-Date -Format 'dd/MM/yyyy HH:mm:ss'))
+      }
+    }
+    Add-Content -LiteralPath $log -Encoding UTF8 `
+      -Value ("{0}  {1}" -f (Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $msg)
+  } catch { }
+}
+
+function Lancar($arquivo, $argumentos, $cwd, $escondido) {
+  # ProcessStartInfo, nao Start-Process: -FilePath e -WorkingDirectory tratam o
+  # caminho como padrao curinga, e um [ ou ] no caminho quebraria todo
+  # lancamento ("O padrao de caractere curinga especificado nao e valido")
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $arquivo
+  if ($argumentos) { $psi.Arguments = $argumentos }
+  $psi.WorkingDirectory = $cwd
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = [bool]$escondido
+  return [System.Diagnostics.Process]::Start($psi)
 }
 
 function Caminho($item) { Join-Path $pastaApp $item }
@@ -325,9 +349,9 @@ function ApagarTemporario {
   # nao da para apagar a pasta de dentro dela: deixa um cmd solto fazendo isso.
   # O registro fica na pasta do programa, fora daqui, e sempre sobrevive.
   try {
-    Start-Process -FilePath 'cmd.exe' -WindowStyle Hidden -WorkingDirectory $env:TEMP `
-      -ArgumentList '/c', ('ping -n 3 127.0.0.1 >nul & rd /s /q "' + $raizTemp + '"')
-  } catch { }
+    Lancar 'cmd.exe' ('/c ping -n 3 127.0.0.1 >nul & rd /s /q "' + $raizTemp + '"') `
+      $env:TEMP $true | Out-Null
+  } catch { Anotar "nao deu para agendar a limpeza do temporario: $_" }
 }
 
 Anotar "esperando o programa (pid $pidApp) encerrar"
@@ -392,6 +416,9 @@ try {
   MatarServidor
   Restaurar
   Abrir | Out-Null
+  # era justamente a copia que falhou: nao deixa o ZIP e a copia extraida
+  # (centenas de MB) esquecidos no temporario
+  ApagarTemporario
   exit 1
 }
 
@@ -501,6 +528,7 @@ def gerar_script_troca(pid, pasta_app, pasta_nova, raiz_temp=None,
         f'$esperaResponder = {int(tempos["responder"])}\n'
         f'$esperaGraca     = {int(tempos["graca"])}\n'
         f'$esperaVolta     = {int(tempos["volta"])}\n'
+        f'$limiteLog       = {int(LIMITE_LOG)}\n'
         f'$itens           = @({itens})\n'
         # o registro fica na pasta do programa, não no temporário: é lá que a
         # pessoa (ou o suporte) consegue encontrar quando algo der errado

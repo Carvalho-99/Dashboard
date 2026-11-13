@@ -280,7 +280,7 @@ check_eq('script nao e item do programa', _script.name in ITENS, False)
 check_eq('script espera o pid sair', 'Get-Process -Id $pidApp' in _texto, True)
 check_eq('script move de lado',      '"$atual.old"' in _texto, True)
 check_eq('script confere a porta',   '5050' in _texto and 'Responde' in _texto, True)
-check_eq('script reabre o programa', 'Start-Process -FilePath $e' in _texto, True)
+check_eq('script reabre o programa', 'function Abrir' in _texto and 'Lancar $e' in _texto, True)
 check_eq('script tem reversao',      _texto.count('Restaurar') >= 2, True)
 check_eq('tem linha destrutiva',     len(_destrutivas) > 0, True)
 check_eq('nada destrutivo na pasta do app',
@@ -334,7 +334,21 @@ check_eq('reversao descarta renomeando',    'function Descartar' in _texto, True
 check_eq('log na pasta do programa',
          "$log             = Join-Path $pastaApp 'atualizacao.log'" in _texto, True)
 check_eq('log nao fica no temporario',      "Join-Path $raizTemp 'troca.log'" in _texto, False)
-check_eq('temporario sempre apagado',       _texto.count('ApagarTemporario') >= 4, True)
+check_eq('log tem teto de tamanho',
+         '$limiteLog' in _texto and 'registro reiniciado' in _texto, True)
+# Start-Process trata o caminho como padrão curinga: um [ na pasta da instalação
+# quebraria todo lançamento, e toda atualização acabaria em reversão silenciosa
+_linhas_codigo = [l for l in _texto.splitlines() if not l.strip().startswith('#')]
+check_eq('nada de Start-Process no script',
+         any('Start-Process' in l for l in _linhas_codigo), False)
+check_eq('lanca por ProcessStartInfo',      'ProcessStartInfo' in _texto, True)
+check_eq('abre pelo Lancar',                'Lancar $e $null $pastaApp' in _texto, True)
+check_eq('limpeza do temporario pelo Lancar', "Lancar 'cmd.exe'" in _texto, True)
+# os quatro desfechos limpam o temporário, inclusive o catch da troca
+check_eq('temporario sempre apagado',       _texto.count('ApagarTemporario') >= 5, True)
+_catch_troca = _texto[_texto.index('falha na troca'):]
+_catch_troca = _catch_troca[:_catch_troca.index('exit 1')]
+check_eq('catch da troca limpa o temporario', 'ApagarTemporario' in _catch_troca, True)
 
 # ── Só a versão instalada instala ────────────────────────────────────────────
 # Rodando do código-fonte, pasta_do_app() é a pasta do projeto: aplicar a troca
@@ -680,6 +694,47 @@ check_eq('e2e reversao: log conta a reversao', 'reversao concluida' in _log_rb, 
 check_eq('e2e reversao: temporario apagado',
          esperar(lambda: not _raiz_rb.exists()), True)
 
+# 3) Caminhos com colchete. Start-Process trata o caminho como padrão curinga:
+# numa pasta com [ ], o lançador nunca subia, ninguém respondia /versao e toda
+# atualização terminava em reversão — calada, para sempre. O %TEMP% também vai
+# com colchete, para a limpeza do temporário não depender disso.
+_app_cl = montar_fake("e2e [beta] 'c' $d", b'ANTIGA')
+_novo_cl = montar_pacote_novo("e2e [beta] pacote", b'NOVA')
+_sha_db_cl = sha(_app_cl / 'financas.db')
+_raiz_cl = _base / 'e2e [beta] temp'
+_temp_cl = _base / 'TEMP [x]'
+_temp_cl.mkdir()
+_srv_cl = ServidorFalso(versao='9.9.9')
+_temp_antes = (os.environ.get('TEMP'), os.environ.get('TMP'))
+os.environ['TEMP'] = os.environ['TMP'] = str(_temp_cl)
+try:
+    _cod_cl, _log_cl = rodar_auxiliar(_app_cl, _novo_cl, _raiz_cl, _srv_cl.porta, '9.9.9',
+                                      {'fechar': 25, 'responder': 30, 'graca': 20, 'volta': 6})
+finally:
+    for _nome, _valor in zip(('TEMP', 'TMP'), _temp_antes):
+        if _valor is None:
+            os.environ.pop(_nome, None)
+        else:
+            os.environ[_nome] = _valor
+_srv_cl.parar()
+
+check_eq('e2e colchete: codigo 0',          _cod_cl, 0)
+check_eq('e2e colchete: abriu o programa',
+         'nao consegui abrir' not in _log_cl and 'curinga' not in _log_cl, True)
+check_eq('e2e colchete: conteudo novo',     conteudos(_app_cl)['servidor'], b'NOVA servidor')
+check_eq('e2e colchete: lancador novo',
+         conteudos(_app_cl)['lancador'].endswith(b'@@NOVA'), True)
+check_eq('e2e colchete: nao sobrou .old',   list(_app_cl.glob('*.old')), [])
+check_eq('e2e colchete: nao sobrou .new',   list(_app_cl.glob('*.new')), [])
+check_eq('e2e colchete: banco intacto',     sha(_app_cl / 'financas.db'), _sha_db_cl)
+check_eq('e2e colchete: temporario apagado com TEMP entre colchetes',
+         esperar(lambda: not _raiz_cl.exists()), True)
+
+# teto do registro do auxiliar
+_log_cheio = _app_cl / 'atualizacao.log'
+check_eq('e2e colchete: registro existe',   _log_cheio.is_file(), True)
+check_eq('registro do auxiliar e pequeno',  _log_cheio.stat().st_size < atualizador.LIMITE_LOG, True)
+
 _srv.shutdown()
 
 # ── Portão da rota /atualizar: endereço, origem e senha da janela ────────────
@@ -791,6 +846,30 @@ _r_versao = c.get('/versao')
 check_eq('rota /versao responde 200',   _r_versao.status_code, 200)
 check_eq('rota /versao diz a versao',   (_r_versao.get_json() or {}).get('versao'), versao.VERSAO)
 check_eq('rota /versao e json',         'json' in (_r_versao.headers.get('Content-Type') or ''), True)
+# o servidor escuta em 0.0.0.0: a versao instalada nao e assunto de quem esta
+# na mesma rede, e o auxiliar pergunta sempre em 127.0.0.1
+_r_versao_fora = c.get('/versao', environ_base={'REMOTE_ADDR': '192.168.0.50'})
+check_eq('rota /versao recusa a rede',  _r_versao_fora.status_code, 403)
+check_eq('rota /versao nao vaza a versao para a rede',
+         versao.VERSAO.encode() in _r_versao_fora.data, False)
+
+# teto do registro do app (num arquivo de teste, nunca na pasta do projeto)
+_log_app_real = flask_app.ARQUIVO_LOG_ATUALIZACAO
+flask_app.ARQUIVO_LOG_ATUALIZACAO = str(_base / 'log_do_app.log')
+flask_app._anotar_atualizacao('primeira linha')
+_arq_log = Path(flask_app.ARQUIVO_LOG_ATUALIZACAO)
+check_eq('app escreve o registro',      'primeira linha' in _arq_log.read_text(encoding='utf-8'), True)
+flask_app._anotar_atualizacao('segunda linha')
+check_eq('app acrescenta no registro',
+         _arq_log.read_text(encoding='utf-8').count('linha'), 2)
+_arq_log.write_bytes(b'x' * (flask_app.LIMITE_LOG_ATUALIZACAO + 10))
+flask_app._anotar_atualizacao('depois do teto')
+_texto_log = _arq_log.read_text(encoding='utf-8')
+check_eq('registro do app recomeca no teto', len(_texto_log) < 200, True)
+check_eq('registro do app mantem a ultima linha', 'depois do teto' in _texto_log, True)
+flask_app.ARQUIVO_LOG_ATUALIZACAO = _log_app_real
+check_eq('log do app volta para a pasta de dados',
+         Path(flask_app.ARQUIVO_LOG_ATUALIZACAO).name, 'atualizacao.log')
 
 # ── Página de espera: sincera sobre o que fazer se nada acontecer ────────────
 flask_app._atualizacao = {'versao': '9.9.9', 'url': 'x', 'sha256': 'y'}

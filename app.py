@@ -371,6 +371,7 @@ def _token_confere(req):
 
 
 ARQUIVO_LOG_ATUALIZACAO = os.path.join(DATA_DIR, 'atualizacao.log')
+LIMITE_LOG_ATUALIZACAO = 64 * 1024     # mesmo teto do auxiliar
 
 
 def _anotar_atualizacao(msg):
@@ -378,9 +379,16 @@ def _anotar_atualizacao(msg):
 
     O app roda sem console (o lançador o sobe com a janela escondida), então um
     print não vai a lugar nenhum. O auxiliar da troca escreve no mesmo arquivo.
+    É registro de apoio, não histórico: passando do teto, recomeça.
     """
     try:
-        with open(ARQUIVO_LOG_ATUALIZACAO, 'a', encoding='utf-8') as f:
+        modo = 'a'
+        try:
+            if os.path.getsize(ARQUIVO_LOG_ATUALIZACAO) > LIMITE_LOG_ATUALIZACAO:
+                modo = 'w'
+        except OSError:
+            pass
+        with open(ARQUIVO_LOG_ATUALIZACAO, modo, encoding='utf-8') as f:
             f.write(f'{datetime.now():%d/%m/%Y %H:%M:%S}  {msg}\n')
     except OSError:
         pass
@@ -392,7 +400,12 @@ def rota_versao():
 
     O auxiliar da atualização confere por aqui: responder 200 na porta não
     prova nada, porque qualquer outro programa pode estar ocupando a porta.
+
+    Só o próprio PC: o servidor escuta em 0.0.0.0, e a versão instalada não é
+    assunto de quem está na mesma rede. O auxiliar pergunta em 127.0.0.1.
     """
+    if not _e_local(request):
+        return jsonify(erro='Disponível apenas neste computador.'), 403
     return jsonify(versao=versao.VERSAO)
 
 
